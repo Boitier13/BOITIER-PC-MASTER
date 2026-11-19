@@ -1,27 +1,29 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# Dépendances
 /node_modules
 
-# next.js
-/.next/
-/out/
+# Build frontend (Vite)
+/dist
+/coverage
 
-# production
-/build
+# Build Rust / Tauri
+/src-tauri/target
+/src-tauri/gen/schemas
+/src-tauri/gen/android
+/src-tauri/gen/apple
 
-# debug
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
+# Fichiers d'environnement (aucun n'est requis par l'application : 100 % hors ligne)
 .env*
+!.env.example
 
-# vercel
-.vercel
-
-# typescript
+# TypeScript
 *.tsbuildinfo
-next-env.d.ts
+
+# Système
+.DS_Store
+Thumbs.db

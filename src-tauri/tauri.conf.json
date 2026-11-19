@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BOITIER PC MASTER",
+  "version": "0.1.0",
+  "identifier": "fr.boitier.pcmaster",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "BOITIER PC MASTER",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:; font-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; form-action 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "copyright": "© 2026 BOITIER PC MASTER",
+    "category": "Utility",
+    "shortDescription": "Exploration de fichiers et désinstallation avancée, hors ligne.",
+    "longDescription": "BOITIER PC MASTER inventorie les fichiers et les applications de votre PC, identifie les résidus de désinstallation et vous laisse décider, avec sauvegarde et restauration. Application locale, sans compte ni serveur distant.",
+    "windows": {
+      "allowDowngrades": true
+    }
+  },
+  "plugins": {}
+}

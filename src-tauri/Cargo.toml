@@ -1,0 +1,31 @@
+[package]
+name = "boitier-pc-master"
+version = "0.1.0"
+description = "BOITIER PC MASTER — exploration et inventaire de fichiers, désinstallation avancée"
+authors = ["Boitier13"]
+edition = "2021"
+rust-version = "1.77"
+default-run = "boitier-pc-master"
+
+[lib]
+# Nom de bibliothèque utilisé par `main.rs` : boitier_lib::run()
+name = "boitier_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Phase 1 : aucune dépendance système, aucun plugin d'accès (fs, shell, process,
+# http). SQLite (rusqlite, feature "bundled") sera ajouté en phase 2, avec la
+# première migration réellement exécutée.
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
