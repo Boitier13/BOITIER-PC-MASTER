@@ -13,7 +13,8 @@ use crate::apps::model::{
 /// rencontrent, ce qui correspond à l'usage réel d'un champ de recherche.
 pub fn normalize(value: &str) -> String {
     let mut normalized = String::with_capacity(value.len());
-    for character in value.chars() {
+    // Minuscules d'abord : sinon « É » ne serait pas reconnu comme un accent.
+    for character in value.chars().flat_map(char::to_lowercase) {
         match character {
             'à' | 'â' | 'ä' | 'á' | 'ã' | 'å' => normalized.push('a'),
             'é' | 'è' | 'ê' | 'ë' => normalized.push('e'),
@@ -24,7 +25,7 @@ pub fn normalize(value: &str) -> String {
             'ñ' => normalized.push('n'),
             'œ' => normalized.push_str("oe"),
             'æ' => normalized.push_str("ae"),
-            other => normalized.extend(other.to_lowercase()),
+            other => normalized.push(other),
         }
     }
     normalized
@@ -220,6 +221,13 @@ mod tests {
         let found = inventory(entries, query);
         assert_eq!(found.total, 1);
         assert_eq!(found.items[0].name, "Téléchargeur");
+    }
+
+    #[test]
+    fn la_normalisation_traite_les_majuscules_accentuees() {
+        assert_eq!(normalize("Éditeur Français"), "editeur francais");
+        assert_eq!(normalize("TÉLÉCHARGEMENTS"), "telechargements");
+        assert_eq!(normalize("Œuvre"), "oeuvre");
     }
 
     #[test]
