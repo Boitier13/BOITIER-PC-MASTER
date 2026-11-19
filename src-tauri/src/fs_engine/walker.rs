@@ -293,12 +293,15 @@ mod tests {
         assert!(!result.stats.cancelled);
         assert!(!result.stats.truncated);
 
-        let pdfs: Vec<_> = result
+        let documents: Vec<_> = result
             .entries
             .iter()
             .filter(|entry| entry.category == "document")
             .collect();
-        assert_eq!(pdfs.len(), 2);
+        // rapport.pdf, budget.xlsx et notes.txt sont tous des « documents ».
+        assert_eq!(documents.len(), 3);
+        assert!(documents.iter().any(|entry| entry.name == "rapport.pdf"));
+        assert!(documents.iter().any(|entry| entry.name == "budget.xlsx"));
         assert!(result.stats.total_size_bytes >= 4_096 + 1_024);
         assert!(
             result
