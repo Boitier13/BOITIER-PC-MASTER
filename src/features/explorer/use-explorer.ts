@@ -55,6 +55,9 @@ export interface ExplorerController {
 
   /* affichage */
   entries: FileEntry[]
+  /** `true` quand le plafond de pages chargées est atteint : « Tout afficher » reste possible. */
+  partiallyLoaded: boolean
+  loadAll: () => void
   filter: FileCategory | 'all'
   setFilter: (value: FileCategory | 'all') => void
   includeHidden: boolean
@@ -335,6 +338,8 @@ export function useExplorer(options: Options): ExplorerController {
     folders,
     volumesError,
     entries,
+    partiallyLoaded: listing.truncated && !scan,
+    loadAll: listing.loadAll,
     filter,
     setFilter,
     includeHidden,

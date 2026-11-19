@@ -4,6 +4,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Copy,
   Eye,
   EyeOff,
@@ -12,10 +14,11 @@ import {
   Folder,
   HardDrive,
   ListFilter,
+  PanelRight,
   Search,
   Trash2,
 } from 'lucide-react'
-import { Fragment, useMemo, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
 import { DemoLabel } from '@/components/DemoLabel'
 import { PageHeading } from '@/components/PageHeading'
 import { CATEGORY_FILTERS, pathSegments } from '@/domain/file-entry'
@@ -23,9 +26,13 @@ import type { FileEntry } from '@/domain/types'
 import { FileTable } from '@/features/explorer/FileTable'
 import { PropertiesPanel } from '@/features/explorer/PropertiesPanel'
 import { useExplorer } from '@/features/explorer/use-explorer'
+import { useResizableWidth } from '@/features/explorer/use-resizable-width'
 import { useEngineMode } from '@/hooks/use-engine-mode'
 import { formatCount, formatDuration } from '@/lib/format'
 import { useAppState } from '@/store/app-state'
+
+/** Nombre d'éléments affichés par page de l'explorateur. */
+const VIEW_PAGE_SIZE = 250
 
 const ACTIONS = [
   { name: 'Ouvrir', icon: ExternalLink },
@@ -58,6 +65,37 @@ export function ExplorerPage() {
     onProtected: () => openAction('Dossier protégé — non parcouru'),
     onSymlink: () => openAction('Lien symbolique — non suivi'),
   })
+
+  const [propertiesVisible, setPropertiesVisible] = useState(true)
+  const [page, setPage] = useState(1)
+
+  // Largeurs de panneaux réglables (mémorisées localement, aucune donnée système).
+  const treeWidth = useResizableWidth({ storageKey: 'explorer.treeWidth', initial: 160, min: 140, max: 320 })
+  const propertiesWidth = useResizableWidth({
+    storageKey: 'explorer.propertiesWidth',
+    initial: 220,
+    min: 200,
+    max: 420,
+    invert: true,
+  })
+
+  // Pagination d'affichage : le moteur fournit des pages de 1 000, l'écran
+  // présente des pages de 250 éléments, tri et filtres appliqués sur l'ensemble.
+  useEffect(() => {
+    setPage(1)
+  }, [explorer.path, explorer.filter, explorer.sortKey, explorer.sortDirection, explorer.includeHidden])
+
+  const totalEntries = explorer.entries.length
+  const pageCount = Math.max(1, Math.ceil(totalEntries / VIEW_PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const visibleEntries = useMemo(
+    () => explorer.entries.slice((currentPage - 1) * VIEW_PAGE_SIZE, currentPage * VIEW_PAGE_SIZE),
+    [currentPage, explorer.entries],
+  )
+
+  useEffect(() => {
+    if (page !== currentPage) setPage(currentPage)
+  }, [currentPage, page])
 
   const segments = useMemo(() => pathSegments(explorer.path), [explorer.path])
 
@@ -179,7 +217,15 @@ export function ExplorerPage() {
         </div>
       </div>
 
-      <div className="explorer-layout">
+      <div
+        className={`explorer-layout ${propertiesVisible ? '' : 'properties-hidden'}`}
+        style={
+          {
+            '--tree-width': `${treeWidth.width}px`,
+            '--properties-width': `${propertiesWidth.width}px`,
+          } as CSSProperties
+        }
+      >
         <aside className="tree-panel">
           <div className="tree-title">
             <strong>Emplacements</strong>
@@ -232,6 +278,16 @@ export function ExplorerPage() {
           )}
         </aside>
 
+        <button
+          type="button"
+          className="panel-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Redimensionner le panneau Emplacements"
+          title="Glisser pour élargir ou réduire · double-clic pour la largeur par défaut"
+          {...treeWidth.handleProps}
+        />
+
         <section className="file-list-panel">
           <div className="file-list-toolbar">
             <strong>Éléments</strong>
@@ -278,6 +334,17 @@ export function ExplorerPage() {
 
             <button className="icon-button" aria-label="Options d’affichage" title="Options d’affichage">
               <ListFilter size={16} />
+            </button>
+
+            <button
+              type="button"
+              className="toolbar-button"
+              aria-pressed={propertiesVisible}
+              aria-label={propertiesVisible ? 'Masquer le panneau Propriétés' : 'Afficher le panneau Propriétés'}
+              title={propertiesVisible ? 'Masquer le panneau Propriétés' : 'Afficher le panneau Propriétés'}
+              onClick={() => setPropertiesVisible((value) => !value)}
+            >
+              <PanelRight size={15} /> Propriétés
             </button>
           </div>
 
@@ -347,7 +414,7 @@ export function ExplorerPage() {
           )}
 
           <FileTable
-            entries={explorer.entries}
+            entries={visibleEntries}
             loading={explorer.loading}
             selectedPath={explorer.selected?.path ?? null}
             sortKey={explorer.sortKey}
@@ -361,21 +428,97 @@ export function ExplorerPage() {
 
           <div className="table-footer">
             <span>
-              {explorer.entries.length} éléments · {demo ? 'Données fictives' : 'Lecture seule'}
+              {formatCount(explorer.entries.length)} éléments · {demo ? 'Données fictives' : 'Lecture seule'}
               {explorer.truncated
                 ? ` · plafond de ${formatCount(explorer.matchedCount)} éléments atteint`
                 : ''}
             </span>
-            <span>{footerRight}</span>
+            {pageCount > 1 ? (
+              <div className="explorer-pagination" aria-label="Pagination des éléments">
+                <span className="pagination-info">
+                  {explorer.matchedCount > totalEntries
+                    ? `${formatCount(totalEntries)} affichés sur ${formatCount(explorer.matchedCount)}`
+                    : `${formatCount(totalEntries)} éléments`}{' '}
+                  · page {currentPage} / {pageCount}
+                </span>
+                {explorer.partiallyLoaded ? (
+                  <button
+                    type="button"
+                    className="pagination-button pagination-all"
+                    onClick={explorer.loadAll}
+                    title="Charger les éléments restants de ce dossier"
+                  >
+                    Tout afficher
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="pagination-button"
+                  aria-label="Première page"
+                  title="Première page"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage(1)}
+                >
+                  <ChevronsLeft size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="pagination-button"
+                  aria-label="Page précédente"
+                  title="Page précédente"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage(currentPage - 1)}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="pagination-button"
+                  aria-label="Page suivante"
+                  title="Page suivante"
+                  disabled={currentPage >= pageCount}
+                  onClick={() => setPage(currentPage + 1)}
+                >
+                  <ChevronRight size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="pagination-button"
+                  aria-label="Dernière page"
+                  title="Dernière page"
+                  disabled={currentPage >= pageCount}
+                  onClick={() => setPage(pageCount)}
+                >
+                  <ChevronsRight size={16} />
+                </button>
+              </div>
+            ) : (
+              <span>{footerRight}</span>
+            )}
           </div>
         </section>
 
-        <PropertiesPanel
-          entry={explorer.selected}
-          demo={demo}
-          onOpen={explorer.open}
-          onCopyPath={(entry) => void copyPath(entry)}
-        />
+        {propertiesVisible && (
+          <button
+            type="button"
+            className="panel-resizer properties-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Redimensionner le panneau Propriétés"
+            title="Glisser pour élargir ou réduire · double-clic pour la largeur par défaut"
+            {...propertiesWidth.handleProps}
+          />
+        )}
+
+        {propertiesVisible && (
+          <PropertiesPanel
+            entry={explorer.selected}
+            demo={demo}
+            onOpen={explorer.open}
+            onCopyPath={(entry) => void copyPath(entry)}
+            onHide={() => setPropertiesVisible(false)}
+          />
+        )}
       </div>
     </>
   )

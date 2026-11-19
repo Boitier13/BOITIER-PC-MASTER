@@ -1,4 +1,4 @@
-import { render, renderHook, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { App } from '@/app/App'
@@ -181,7 +181,7 @@ describe('Pagination du listage (EX1.1)', () => {
     expect(result.current.listing?.entries.length).toBe(PAGE_SIZE * MAX_PAGES)
   })
 
-  it('affiche dans l’écran les éléments de toutes les pages chargées', async () => {
+  it('pagine l’affichage, puis atteint le dernier élément chargé', async () => {
     const { service } = pagedService({ total: 1_500 })
 
     render(
@@ -192,8 +192,63 @@ describe('Pagination du listage (EX1.1)', () => {
 
     const table = within(await screen.findByRole('table'))
     expect(await table.findByText('fichier-00000.txt')).toBeInTheDocument()
+    expect(await screen.findByText(/page 1 \/ 6/)).toBeInTheDocument()
+    expect(table.queryByText('fichier-01499.txt')).not.toBeInTheDocument()
+
+    // 1 500 éléments chargés, 250 par page : la dernière page existe et mène au dernier fichier.
+    fireEvent.click(screen.getByRole('button', { name: 'Dernière page' }))
+    expect(await screen.findByText(/page 6 \/ 6/)).toBeInTheDocument()
     expect(await table.findByText('fichier-01499.txt')).toBeInTheDocument()
-    expect(await screen.findByText(/1500 éléments/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Première page' }))
+    expect(await screen.findByText(/page 1 \/ 6/)).toBeInTheDocument()
+    expect(await table.findByText('fichier-00000.txt')).toBeInTheDocument()
+  })
+
+  it('ne monte jamais plus d’une page de lignes dans le DOM', async () => {
+    const { service } = pagedService({ total: 1_500 })
+
+    render(
+      <MemoryRouter initialEntries={['/explorer']}>
+        <App service={service} />
+      </MemoryRouter>,
+    )
+
+    const table = within(await screen.findByRole('table'))
+    expect(await screen.findByText(/page 1 \/ 6/)).toBeInTheDocument()
+
+    // 1 500 éléments chargés, 250 par page : le DOM reste borné au fenêtrage.
+    const dataRows = () =>
+      screen.getAllByRole('row').filter((row) => row.querySelector('strong') !== null)
+    expect(dataRows().length).toBe(250)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dernière page' }))
+    expect(await screen.findByText(/page 6 \/ 6/)).toBeInTheDocument()
+    expect(dataRows().length).toBe(250)
+    expect(table.getByText('fichier-01499.txt')).toBeInTheDocument()
+  })
+
+  it('« Tout afficher » lève le plafond de pages sans dépasser la borne de sécurité', async () => {
+    const { service, calls } = pagedService({ total: 25_000 })
+
+    const { result } = renderHook(() =>
+      usePagedListing(service, ROOT, { includeHidden: false, maxEntries: 50_000 }),
+    )
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.listing?.entries).toHaveLength(MAX_PAGES * PAGE_SIZE)
+    expect(result.current.truncated).toBe(true)
+    expect(calls).toHaveLength(MAX_PAGES)
+
+    act(() => result.current.loadAll())
+
+    await waitFor(() => expect(result.current.listing?.entries ?? []).toHaveLength(25_000))
+    expect(result.current.truncated).toBe(false)
+    expect(calls.length).toBe(25)
+    // Poursuite par documents contigus : aucun recouvrement d'offset.
+    expect(calls.map((call) => call.offset)).toStrictEqual(
+      Array.from({ length: 25 }, (_, index) => index * PAGE_SIZE),
+    )
   })
 
   it('signale une erreur de moteur sans afficher de liste vide trompeuse', async () => {

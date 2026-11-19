@@ -1,4 +1,4 @@
-import { Copy, ExternalLink, FileText, FolderOpen, Info, MoreHorizontal } from 'lucide-react'
+import { ChevronRight, Copy, ExternalLink, FileText, FolderOpen, Info, MoreHorizontal } from 'lucide-react'
 import { CATEGORY_LABELS, describeAttributes } from '@/domain/file-entry'
 import type { FileEntry } from '@/domain/types'
 import { formatBytes, formatDateTime } from '@/lib/format'
@@ -8,6 +8,8 @@ interface PropertiesPanelProps {
   demo: boolean
   onOpen: (entry: FileEntry) => void
   onCopyPath: (entry: FileEntry) => void
+  /** Replie le panneau : la liste des fichiers récupère toute la largeur. */
+  onHide?: () => void
 }
 
 function stateLabel(entry: FileEntry): string {
@@ -18,12 +20,25 @@ function stateLabel(entry: FileEntry): string {
 }
 
 /** Panneau Propriétés : uniquement des métadonnées lues, jamais modifiables. */
-export function PropertiesPanel({ entry, demo, onOpen, onCopyPath }: PropertiesPanelProps) {
+export function PropertiesPanel({ entry, demo, onOpen, onCopyPath, onHide }: PropertiesPanelProps) {
   return (
     <aside className="properties-panel">
       <div className="properties-title">
         <strong>Propriétés</strong>
-        <MoreHorizontal size={17} />
+        {onHide ? (
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Replier le panneau Propriétés"
+            aria-expanded
+            title="Replier le panneau Propriétés"
+            onClick={onHide}
+          >
+            <ChevronRight size={16} />
+          </button>
+        ) : (
+          <MoreHorizontal size={17} />
+        )}
       </div>
 
       {!entry && (

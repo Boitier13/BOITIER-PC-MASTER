@@ -14,6 +14,7 @@ import {
 import { useRef } from 'react'
 import type { FileEntry, FileSortKey, SortDirection } from '@/domain/types'
 import { EXPLORER_COLUMN_COUNT, EXPLORER_COLUMNS } from '@/features/explorer/columns'
+import { useColumnWidths } from '@/features/explorer/use-column-widths'
 import { useRowWindow } from '@/features/explorer/use-row-window'
 import { formatBytes, formatDate } from '@/lib/format'
 
@@ -69,6 +70,7 @@ export function FileTable({
 }: FileTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const rows = useRowWindow(scrollRef, entries.length)
+  const columnWidths = useColumnWidths()
   const visible = rows.windowed ? entries.slice(rows.start, rows.end) : entries
 
   const spacerHeight = (rowCount: number) => rowCount * rows.rowHeight
@@ -76,6 +78,11 @@ export function FileTable({
   return (
     <div className="table-wrap" ref={scrollRef}>
       <table aria-rowcount={entries.length}>
+        <colgroup>
+          {EXPLORER_COLUMNS.map((column) => (
+            <col key={column.key} style={{ width: `${columnWidths.widths[column.key]}px` }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             {EXPLORER_COLUMNS.map((column) => {
@@ -100,6 +107,20 @@ export function FileTable({
                       )
                     ) : null}
                   </button>
+                  <button
+                    type="button"
+                    className="column-resizer"
+                    aria-label={`Redimensionner la colonne ${column.label}`}
+                    title="Glisser pour redimensionner · double-clic pour ajuster au contenu · flèches au clavier"
+                    onPointerDown={(event) => columnWidths.startResize(column.key, event)}
+                    onKeyDown={(event) => columnWidths.resizeWithKeyboard(column.key, event)}
+                    onDoubleClick={() =>
+                      columnWidths.fitToContent(
+                        column.key,
+                        scrollRef.current?.querySelector('table') ?? null,
+                      )
+                    }
+                  />
                 </th>
               )
             })}

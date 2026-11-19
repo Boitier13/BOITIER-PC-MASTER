@@ -14,6 +14,12 @@ export const PAGE_SIZE = 1_000
 /** Garde-fou d'affichage : au-delà, l'écran signale la troncature. */
 export const MAX_PAGES = 20
 
+/**
+ * Plafond absolu quand l'utilisateur demande « Tout afficher » : borne la boucle
+ * d'appels même si le moteur annonce indéfiniment des pages suivantes.
+ */
+export const LOAD_ALL_MAX_PAGES = 100
+
 export interface PagedListingState {
   /** Dernière page reçue, enrichie de toutes les entrées déjà chargées. */
   listing: DirectoryListing | null
@@ -22,7 +28,11 @@ export interface PagedListingState {
   /** `true` pendant le chargement des pages suivantes. */
   loadingMore: boolean
   error: unknown
+  /** `true` quand le plafond de pages est atteint et qu'il reste des éléments. */
+  truncated: boolean
   reload: () => void
+  /** Lève le plafond de pages et charge tout ce que le moteur accepte. */
+  loadAll: () => void
 }
 
 interface Options {
@@ -54,13 +64,22 @@ export function usePagedListing(
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [nonce, setNonce] = useState(0)
+  const [maxPages, setMaxPages] = useState(MAX_PAGES)
   const generation = useRef(0)
+  // Reprise après « Tout afficher » : on poursuit à partir des pages déjà
+  // chargées au lieu de tout redemander depuis l'offset 0.
+  const loadedRef = useRef<FileEntry[]>([])
+  /** Offset de reprise demandé par « Tout afficher » (0 = chargement normal). */
+  const resumeRef = useRef(0)
 
   useEffect(() => {
     const current = generation.current + 1
     generation.current = current
+    const resumeFrom = resumeRef.current
+    resumeRef.current = 0
 
     if (!path) {
+      loadedRef.current = []
       setListing(null)
       setLoading(false)
       setLoadingMore(false)
@@ -69,9 +88,16 @@ export function usePagedListing(
     }
 
     let cancelled = false
-    setListing(null)
-    setLoading(true)
-    setLoadingMore(false)
+    const resumed = resumeFrom > 0 && loadedRef.current.length >= resumeFrom
+    const alreadyLoaded = resumed ? loadedRef.current : []
+    if (resumed) {
+      setLoadingMore(true)
+    } else {
+      loadedRef.current = []
+      setListing(null)
+      setLoading(true)
+      setLoadingMore(false)
+    }
     setError(null)
 
     const load = async () => {
@@ -79,18 +105,24 @@ export function usePagedListing(
         let page = await service.listDirectory(path, {
           includeHidden,
           maxEntries,
-          offset: 0,
+          offset: alreadyLoaded.length,
           limit: pageSize,
         })
         if (cancelled || generation.current !== current) return
 
-        let entries: FileEntry[] = page.entries
+        let entries: FileEntry[] = alreadyLoaded.concat(page.entries)
+        loadedRef.current = entries
         setListing({ ...page, entries })
         setLoading(false)
         setLoadingMore(Boolean(page.hasMore))
 
-        let pages = 1
-        while (page.hasMore && pages < MAX_PAGES) {
+        // Le plafond étendu ne s'applique qu'à une reprise explicite : changer
+        // de dossier repart sur le budget standard.
+        const pageBudget = resumeFrom > 0
+          ? (Number.isFinite(maxPages) ? maxPages : Math.max(MAX_PAGES, LOAD_ALL_MAX_PAGES))
+          : MAX_PAGES
+        let pages = Math.max(1, Math.ceil(alreadyLoaded.length / pageSize))
+        while (page.hasMore && pages < pageBudget) {
           page = await service.listDirectory(path, {
             includeHidden,
             maxEntries,
@@ -100,6 +132,7 @@ export function usePagedListing(
           if (cancelled || generation.current !== current) return
           if (page.entries.length === 0) break
           entries = entries.concat(page.entries)
+          loadedRef.current = entries
           setListing({ ...page, entries })
           setLoadingMore(Boolean(page.hasMore))
           pages += 1
@@ -120,9 +153,14 @@ export function usePagedListing(
     return () => {
       cancelled = true
     }
-  }, [service, path, includeHidden, maxEntries, pageSize, nonce])
+  }, [service, path, includeHidden, maxEntries, pageSize, nonce, maxPages])
 
   const reload = useCallback(() => setNonce((value) => value + 1), [])
+  const loadAll = useCallback(() => {
+    resumeRef.current = loadedRef.current.length
+    setMaxPages(Number.POSITIVE_INFINITY)
+  }, [])
+  const truncated = Boolean(listing?.hasMore)
 
-  return { listing, loading, loadingMore, error, reload }
+  return { listing, loading, loadingMore, error, truncated, reload, loadAll }
 }

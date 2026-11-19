@@ -532,12 +532,18 @@ check('Typographie', 'Feuille des polices chargée avant la feuille globale',
 check('Typographie', 'Nunito Sans appliquée aux écrans principaux',
   /body \{[^}]*font-family:'Nunito Sans Variable'/u.test(globalsCss) &&
   /--font-read:'Nunito Sans Variable'/u.test(globalsCss))
-check('Typographie', 'Barre latérale : Arial conservée, échelle ×1,5 appliquée',
+check('Typographie', 'Barre latérale : Arial conservée, libellés ramenés à 17 px (correction du 19/11)',
   ruleBody('.sidebar').includes('font-family:Arial,Helvetica,sans-serif') &&
-  ruleBody('.sidebar').includes('font-size:18px') &&
+  ruleBody('.sidebar').includes('font-size:17px') &&
   ruleBody('.nav-item').includes('height:42px') &&
-  bodies('.nav-item span:nth-child(2)').some((body) => body.includes('font-size:18px')) &&
+  ruleBody('.nav-item').includes('font-size:17px') &&
+  bodies('.nav-item span:nth-child(2)').some((body) => body.includes('font-size:17px')) &&
   ruleBody('.brand strong').includes('font-size:19.5px'))
+check('Typographie', 'Barre latérale : rubriques ajustées, espacements et couleurs inchangés',
+  ruleBody('.nav-group>p').includes('font-size:13px') &&
+  ruleBody('.nav-group>p').includes('letter-spacing:.1em') &&
+  ruleBody('.nav-group>p').includes('color:var(--subtle)') &&
+  ruleBody('.nav-item').includes('height:42px'))
 check('Typographie', 'Paquet @fontsource absent des dépendances',
   !JSON.stringify(packageJson?.dependencies ?? {}).includes('@fontsource') &&
   !JSON.stringify(packageJson?.devDependencies ?? {}).includes('@fontsource'))
@@ -655,6 +661,60 @@ check('Mise en page', 'Écrans principaux : échelle ×1,5 et Nunito Sans prése
   globalsCss.includes("--font-read:'Nunito Sans Variable'"))
 check('Mise en page', 'Aucune largeur minimale supérieure à 1010 px dans les écrans',
   Math.max(...[...globalsCss.matchAll(/min-width:(\d+)px/gu)].map((match) => Number(match[1]))) <= 1010)
+
+/* ------------------------------------- Explorateur : lisibilité et commandes */
+
+const explorerPageTsx = read('src/features/explorer/ExplorerPage.tsx')
+const propertiesPanelTsx = read('src/features/explorer/PropertiesPanel.tsx')
+const fileTableTsx = read('src/features/explorer/FileTable.tsx')
+const columnWidthsTs = read('src/features/explorer/use-column-widths.ts')
+const resizableWidthTs = read('src/features/explorer/use-resizable-width.ts')
+const pagedListingTs = read('src/features/explorer/use-paged-listing.ts')
+
+const treeWidth = 160
+const propertiesWidth = 220
+const panelGutter = 6
+const explorerColumns = 250 + 120 + 110 + 170
+const explorerListWidth = 1440 - sidebarWidth - pagePadding * 2 - treeWidth - panelGutter * 2 - propertiesWidth
+
+check('Explorateur — mise en page', 'Colonnes : poignée de redimensionnement sur chaque en-tête',
+  fileTableTsx.includes('column-resizer') && fileTableTsx.includes('columnWidths.startResize') &&
+  ruleBody('.column-resizer').includes('cursor:col-resize'))
+check('Explorateur — mise en page', 'Colonnes : largeurs minimales posées en colgroup, défilement horizontal prévu',
+  fileTableTsx.includes('<colgroup>') && columnWidthsTs.includes('fitToContent') &&
+  ruleBody('.file-list-panel .table-wrap table').includes('width:max-content') &&
+  ruleBody('.file-list-panel .table-wrap table').includes('min-width:100%') &&
+  bodies('.table-wrap').some((body) => body.includes('overflow-x:auto')))
+check('Explorateur — mise en page', 'Colonnes : jamais de troncature définitive (aucun text-overflow sur les cellules)',
+  !ruleBody('.file-list-panel .table-wrap td').includes('text-overflow') &&
+  !ruleBody('.table-wrap td').includes('text-overflow'))
+check('Explorateur — mise en page', 'Panneaux : largeurs réglables et mémorisées (Emplacements, Propriétés)',
+  ruleBody('.explorer-layout').includes('var(--tree-width') &&
+  ruleBody('.explorer-layout').includes('var(--properties-width') &&
+  explorerPageTsx.includes('useResizableWidth') && resizableWidthTs.includes('localStorage'))
+check('Explorateur — mise en page', 'Panneaux : Propriétés repliable et accessible au clavier',
+  ruleBody('.explorer-layout.properties-hidden').includes('minmax(0,1fr)') &&
+  propertiesPanelTsx.includes('onHide') && explorerPageTsx.includes('properties-hidden') &&
+  explorerPageTsx.includes("aria-pressed={propertiesVisible}"))
+check('Explorateur — mise en page', 'Pagination : total, page courante et nombre de pages affichés',
+  explorerPageTsx.includes('page {currentPage} / {pageCount}') &&
+  explorerPageTsx.includes('explorer.matchedCount') && explorerPageTsx.includes('formatCount(totalEntries)'))
+check('Explorateur — mise en page', 'Pagination : première, précédente, suivante, dernière page',
+  ['Première page', 'Page précédente', 'Page suivante', 'Dernière page'].every((label) => explorerPageTsx.includes(label)) &&
+  ruleBody('.pagination-button:disabled').includes('cursor:default'))
+check('Explorateur — mise en page', 'Pagination : masquée quand une seule page suffit',
+  explorerPageTsx.includes('pageCount > 1 ?') && explorerPageTsx.includes('VIEW_PAGE_SIZE'))
+check('Explorateur — mise en page', 'Pagination : « Tout afficher » lève le plafond de pages',
+  pagedListingTs.includes('POSITIVE_INFINITY') && pagedListingTs.includes('loadAll') &&
+  explorerPageTsx.includes('Tout afficher') && explorerPageTsx.includes('explorer.loadAll'))
+check('Explorateur — mise en page', 'Recherche et commandes : champ entier visible, boutons jamais coupés',
+  ruleBody('.file-list-toolbar .table-search').includes('flex:1 1 220px') &&
+  ruleBody('.file-list-toolbar .table-search input').includes('width:100%') &&
+  ruleBody('.explorer-actions .button, .explorer-actions .icon-button').includes('flex:0 0 auto') &&
+  ruleBody('.explorer-toolbar').includes('flex-wrap:wrap'))
+check('Explorateur — mise en page', `Adaptation 1440 × 900 : liste de ${explorerListWidth} px pour ${explorerColumns} px de colonnes`,
+  sidebarWidth > 0 && explorerListWidth >= explorerColumns,
+  `${sidebarWidth + pagePadding * 2 + treeWidth + panelGutter * 2 + propertiesWidth + explorerColumns} px au total`)
 
 /* -------------------------------------------------------------- Rapport */
 
