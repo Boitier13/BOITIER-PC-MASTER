@@ -493,6 +493,38 @@ check('Installateur', 'Procédure de téléchargement et limites documentées',
   read('docs/BUILD_INSTALLER.md').includes('SmartScreen') &&
   read('docs/BUILD_INSTALLER.md').includes('SHA256'))
 
+/* ------------------------------------------------------------ Typographie */
+
+const fontsCss = existsSync(join(root, 'src/styles/fonts.css')) ? read('src/styles/fonts.css') : ''
+const mainTsx = read('src/main.tsx')
+const globalsCss = read('src/styles/globals.css')
+const packageJson = readJson('package.json')
+const fontFiles = existsSync(join(root, 'src/assets/fonts'))
+  ? readdirSync(join(root, 'src/assets/fonts'))
+  : []
+
+check('Typographie', 'Feuille de style des polices présente', fontsCss.length > 0)
+check('Typographie', 'Nunito Sans déclarée en police variable (graisses 200 à 1000)',
+  (fontsCss.match(/font-family: 'Nunito Sans Variable'/gu) ?? []).length === 2 &&
+  (fontsCss.match(/font-weight: 200 1000/gu) ?? []).length === 2 &&
+  (fontsCss.match(/format\('woff2-variations'\)/gu) ?? []).length === 2)
+check('Typographie', 'Polices embarquées : aucun chargement réseau',
+  !/https?:\/\//u.test(fontsCss) && !/@import/u.test(fontsCss) && !/fonts\.googleapis/u.test(globalsCss))
+check('Typographie', 'Fichiers de police et licence OFL présents localement',
+  fontFiles.filter((name) => name.endsWith('.woff2')).length === 2 &&
+  fontFiles.includes('OFL.txt'))
+check('Typographie', 'Feuille des polices chargée avant la feuille globale',
+  mainTsx.indexOf('@/styles/fonts.css') !== -1 &&
+  mainTsx.indexOf('@/styles/fonts.css') < mainTsx.indexOf('@/styles/globals.css'))
+check('Typographie', 'Nunito Sans appliquée aux écrans principaux',
+  /body \{[^}]*font-family:'Nunito Sans Variable'/u.test(globalsCss) &&
+  /--font-read:'Nunito Sans Variable'/u.test(globalsCss))
+check('Typographie', 'Barre latérale figée sur sa police et sa taille d’origine',
+  /\.sidebar \{[^}]*font-family:Arial,Helvetica,sans-serif; font-size:13px/u.test(globalsCss))
+check('Typographie', 'Paquet @fontsource absent des dépendances',
+  !JSON.stringify(packageJson?.dependencies ?? {}).includes('@fontsource') &&
+  !JSON.stringify(packageJson?.devDependencies ?? {}).includes('@fontsource'))
+
 /* -------------------------------------------------------------- Rapport */
 
 

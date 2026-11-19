@@ -298,3 +298,42 @@ mock qui refuse au lieu d'inventer, journal non persisté, lots nommés).
 **Limites** : pas de persistance (lot D), doublons et résidus absents (lots C5 et
 C2), surveillance absente (lot C4). Toute mesure partielle est annoncée comme
 telle, avec le nombre d'entrées refusées et de dossiers protégés non parcourus.
+
+## 13. Typographie — Nunito Sans embarquée (2026-11-19)
+
+Les écrans principaux (tableau de bord, explorateur, applications, analyse de
+l'espace, historique, désinstallation, surveillance, paramètres) passent en
+**Nunito Sans**, avec des tailles relevées de moitié et une hiérarchie plus
+lisible. Aucune fonctionnalité, aucun composant métier, aucune commande Rust et
+aucune donnée du lot B n'est modifié : la modification est exclusivement
+visuelle.
+
+| Élément | Avant | Après |
+|---|---|---|
+| Police des écrans | Arial | Nunito Sans (variable, 200–1000) |
+| Police de la barre latérale | Arial 13 px | **inchangée** (Arial 13 px) |
+| Texte courant | 9 px | 13,5 px |
+| Libellés d'onglet de tableau | 9 px | 13,5 px |
+| Titre de page (h1) | 25 px | 37,5 px |
+| Chiffre de tuile | 21 px | 31,5 px |
+| Titre de panneau | 12 px | 18 px |
+| Titre de barre latérale | 12 px | 12 px (inchangé) |
+
+**Embarquement** : les deux sous-ensembles variables (`latin`, `latin-ext`) sont
+copiés dans `src/assets/fonts/` et déclarés par `src/styles/fonts.css`, importé
+en premier par `src/main.tsx`. Aucun `@import`, aucun CDN, aucune requête réseau
+au démarrage ; licence SIL OFL 1.1 fournie avec les fichiers (`OFL.txt`). Le
+paquet `@fontsource-variable/nunito-sans` n'est pas une dépendance : il a servi
+uniquement à récupérer les fichiers, puis a été retiré.
+
+**Hiérarchie** : titres en 750, chiffres en 750 et chasse fixe tabulaire
+(`font-variant-numeric: tabular-nums`) pour aligner les colonnes, libellés de
+tableau en 700 avec interlettrage léger, valeur de ligne en 650. Les hauteurs de
+conteneurs (boutons, champs, barres d'outils, tuiles) ont été ajustées
+proportionnellement (×1,15 à ×1,25) pour accompagner le texte sans modifier les
+grilles structurantes.
+
+**Vérification** : `scripts/check-foundation.mjs` passe à 173 contrôles, dont 8
+pour la typographie (feuille présente, axe variable, aucun chargement réseau,
+fichiers et licence locaux, ordre des imports, Nunito appliquée, barre latérale
+figée sur Arial 13 px, `@fontsource` absent).
