@@ -11,7 +11,10 @@ use serde::Serialize;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum EngineMode {
+    /// Aucune lecture système (aperçu web, démonstration).
+    #[allow(dead_code)] // construit lorsque le basculement manuel sera exposé
     Demo,
+    /// Moteur local réel, strictement en lecture.
     System,
 }
 

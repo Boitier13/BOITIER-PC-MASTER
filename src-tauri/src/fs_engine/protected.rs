@@ -116,6 +116,16 @@ impl ProtectionPolicy {
         }
     }
 
+    /// Ajoute un préfixe de dossier protégé.
+    ///
+    /// Utilisé par les tests unitaires ; servira aussi aux exclusions
+    /// configurables par l'utilisateur dans une phase ultérieure.
+    #[cfg(test)]
+    pub fn with_directory(mut self, path: &Path) -> Self {
+        push_unique(&mut self.directory_prefixes, compare_key(path));
+        self
+    }
+
     pub fn is_protected(&self, path: &Path) -> bool {
         let key = compare_key(path);
         if self
