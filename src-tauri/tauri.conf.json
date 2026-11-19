@@ -44,7 +44,11 @@
     "shortDescription": "Exploration de fichiers et désinstallation avancée, hors ligne.",
     "longDescription": "BOITIER PC MASTER inventorie les fichiers et les applications de votre PC, identifie les résidus de désinstallation et vous laisse décider, avec sauvegarde et restauration. Application locale, sans compte ni serveur distant.",
     "windows": {
-      "allowDowngrades": true
+      "allowDowngrades": true,
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      }
     }
   },
   "plugins": {}

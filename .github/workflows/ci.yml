@@ -120,3 +120,103 @@ jobs:
 
       - name: Compilation de l'application Windows
         run: cargo build --manifest-path src-tauri/Cargo.toml --release
+
+  # ---------------------------------------------------------------------------
+  # Installateur Windows : MSI (WiX) + NSIS, publiés en artefacts
+  # téléchargeables.
+  #
+  # Déclenchement restreint : push sur la SEULE branche de session
+  # `arena/ce96ae0d-boitier-pc-master`. Les jobs `web` et `rust-windows`
+  # continuent de tourner partout (push de n'importe quelle branche, pull
+  # request), mais aucun installateur n'est produit ailleurs.
+  #
+  # Pourquoi pas `workflow_dispatch` ? GitHub n'expose le déclenchement manuel
+  # que si le workflow existe sur la branche par défaut ; or `main` doit rester
+  # intacte. Ce déclencheur pourra remplacer la condition ci-dessous dès que le
+  # workflow sera présent sur `main`.
+  #
+  # `needs` est conservé : l'installateur n'est construit que si les deux jobs
+  # de tests ont réussi, même sur un push.
+  # ---------------------------------------------------------------------------
+  windows-installer:
+    name: Installateur Windows (MSI + NSIS)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/arena/ce96ae0d-boitier-pc-master'
+    runs-on: windows-latest
+    needs: [web, rust-windows]
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Toolchain Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache des dépendances Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: pnpm (version lue dans package.json)
+        uses: pnpm/action-setup@v4
+
+      - name: Node.js 22 + cache pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Installation des dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Build du frontend (Vite)
+        run: pnpm build
+
+      # `tauri build` exécute aussi `beforeBuildCommand` (pnpm build) : le second
+      # passage est incrémental et quasi instantané.
+      - name: Compilation et création des installateurs
+        run: pnpm tauri build --bundles msi,nsis --verbose
+
+      # Échec explicite si un format manque : un job vert ne doit jamais
+      # publier un artefact incomplet.
+      - name: Vérification des fichiers produits
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = @(Get-ChildItem -Path 'src-tauri/target/release/bundle/msi/*.msi' -ErrorAction SilentlyContinue)
+          $nsis = @(Get-ChildItem -Path 'src-tauri/target/release/bundle/nsis/*.exe' -ErrorAction SilentlyContinue)
+          if ($msi.Count -eq 0) { throw "Aucun installateur MSI n'a été produit." }
+          if ($nsis.Count -eq 0) { throw "Aucun installateur NSIS n'a été produit." }
+
+          $lines = @('| Fichier | Taille |', '| --- | --- |')
+          foreach ($f in @($msi) + @($nsis)) {
+            $mb = '{0:N1} Mo' -f ($f.Length / 1MB)
+            Write-Host "Produit : $($f.Name) ($mb)"
+            $lines += "| ``$($f.Name)`` | $mb |"
+          }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $lines -Encoding utf8
+
+      - name: Empreintes SHA-256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(Get-ChildItem 'src-tauri/target/release/bundle/msi/*.msi') +
+                   @(Get-ChildItem 'src-tauri/target/release/bundle/nsis/*.exe')
+          $lines = foreach ($f in $files) {
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $f.FullName).Hash.ToLower()
+            "$hash  $($f.Name)"
+          }
+          $lines | Out-File -FilePath 'SHA256SUMS.txt' -Encoding ascii
+          Get-Content 'SHA256SUMS.txt'
+
+      - name: Publication des artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: boitier-pc-master-windows-x64
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+            SHA256SUMS.txt

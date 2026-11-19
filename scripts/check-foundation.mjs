@@ -346,6 +346,32 @@ check('CI', 'Workflow GitHub Actions : tests web et compilation Windows',
   read('.github/workflows/ci.yml').includes('cargo test') &&
   read('.github/workflows/ci.yml').includes('pnpm test'))
 
+/* ------------------------------------------------------------ Installateur */
+
+const ciWorkflow = read('.github/workflows/ci.yml')
+const tauriConfig = readJson('src-tauri/tauri.conf.json')
+
+check('Installateur', 'Job d’installateur Windows : push de la branche de session seulement',
+  /windows-installer:/u.test(ciWorkflow) &&
+  /needs:\s*\[web,\s*rust-windows\]/u.test(ciWorkflow) &&
+  /if:\s*github\.event_name == 'push'/u.test(ciWorkflow) &&
+  /github\.ref == 'refs\/heads\/arena\/ce96ae0d-boitier-pc-master'/u.test(ciWorkflow))
+check('Installateur', 'Bundles MSI et NSIS demandés explicitement',
+  /tauri build --bundles msi,nsis/u.test(ciWorkflow) &&
+  JSON.stringify(tauriConfig?.bundle?.targets ?? []).includes('nsis'))
+check('Installateur', 'Artefacts publiés (MSI, NSIS, empreintes) et échec si vide',
+  /upload-artifact@v4/u.test(ciWorkflow) &&
+  /bundle\/msi\/\*\.msi/u.test(ciWorkflow) &&
+  /bundle\/nsis\/\*\.exe/u.test(ciWorkflow) &&
+  /if-no-files-found: error/u.test(ciWorkflow) &&
+  /SHA256SUMS\.txt/u.test(ciWorkflow))
+check('Installateur', 'WebView2 : bootstrapper embarqué déclaré dans la configuration',
+  tauriConfig?.bundle?.windows?.webviewInstallMode?.type === 'embedBootstrapper')
+check('Installateur', 'Procédure de téléchargement et limites documentées',
+  existsSync(join(root, 'docs/BUILD_INSTALLER.md')) &&
+  read('docs/BUILD_INSTALLER.md').includes('SmartScreen') &&
+  read('docs/BUILD_INSTALLER.md').includes('SHA256'))
+
 /* -------------------------------------------------------------- Rapport */
 
 
