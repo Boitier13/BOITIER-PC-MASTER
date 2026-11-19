@@ -337,3 +337,48 @@ grilles structurantes.
 pour la typographie (feuille présente, axe variable, aucun chargement réseau,
 fichiers et licence locaux, ordre des imports, Nunito appliquée, barre latérale
 figée sur Arial 13 px, `@fontsource` absent).
+
+## 14. Correctif visuel — barre latérale ×1,5 et tableau des applications (2026-11-19)
+
+**Barre latérale.** Arial est conservée, ainsi que les couleurs, les graisses et
+les interlettrages ; seules les tailles et la métrique changent. Le panneau
+passe de 246 à 320 px, la police de 13 à 18 px, les entrées de 38 à 42 px, la
+marque de 37 à 48 px, les icônes de 17 à 24 px.
+
+| Élément | Avant | Après |
+|---|---|---|
+| Largeur du panneau | 246 px | 320 px |
+| Police de base | 13 px | 18 px |
+| Libellé de menu | 12 px | 18 px |
+| Libellé de groupe | 9 px | 13,5 px |
+| Bandeau de mode | 8 px | 12 px |
+| Marque / pastille | 13 px / 9 px | 19,5 px / 13,5 px |
+| Compteur de menu | 10 px | 15 px |
+| Carte moteur, profil | 10 px / 9 px | 15 px / 13,5 px |
+| Hauteur d’entrée | 38 px | 42 px |
+
+La hauteur reconstituée du panneau est de **867 px** pour une fenêtre de
+900 px ; `.sidebar` est en `overflow:hidden` et `.side-nav` en
+`overflow-y:auto` avec `min-height:0`, donc une fenêtre plus courte fait défiler
+les menus au lieu de les couper.
+
+**Applications installées.** Le tableau est en `table-layout:fixed` avec sept
+colonnes dimensionnées (245 / 150 / 88 / 138 / 108 / 90 / 191 px, soit 1 010 px
+minimum) : plus aucune colonne n’est écrasée, « Taille » reste lisible. Les
+cellules sont tronquées avec `text-overflow:ellipsis` (l’emplacement expose déjà
+son chemin complet en infobulle) et les en-têtes reviennent à la ligne. Sous
+1 010 px de largeur utile, `.table-wrap` défile horizontalement avec une barre
+fine visible. Les filtres, le bouton « Actualiser » et la recherche passent à la
+ligne (`flex-wrap`) et le champ de recherche se dimensionne sur son conteneur.
+
+**Protection du lot typographique.** Nunito Sans et l’échelle ×1,5 des écrans
+principaux sont inchangées ; deux contrôles les verrouillent (titres 37,5 px,
+cellules 13,5 px, chiffres de tuile 31,5 px, `--font-read`). Aucune commande
+Rust, aucun composant métier, aucune donnée du lot B n’est modifié.
+
+**Contrôles ajoutés** (`scripts/check-foundation.mjs`, 183 au total) : police et
+métrique de la barre latérale, absence de coupe et défilement de la navigation,
+hauteur estimée du panneau ≤ 900 px, sept colonnes dimensionnées, troncature des
+cellules, défilement horizontal prévu, barre de filtres qui passe à la ligne,
+somme `panneau + tableau + marges ≤ 1 440 px`, échelle principale préservée et
+aucune largeur minimale supérieure à 1 010 px.

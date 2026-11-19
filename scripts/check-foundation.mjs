@@ -498,6 +498,16 @@ check('Installateur', 'Procédure de téléchargement et limites documentées',
 const fontsCss = existsSync(join(root, 'src/styles/fonts.css')) ? read('src/styles/fonts.css') : ''
 const mainTsx = read('src/main.tsx')
 const globalsCss = read('src/styles/globals.css')
+function bodies(selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const pattern = new RegExp(`${escaped}\\s*\\{([^{}]*)\\}`, 'gu')
+  return [...globalsCss.matchAll(pattern)].map((match) => match[1])
+}
+
+function ruleBody(selector) {
+  return bodies(selector)[0] ?? ''
+}
+
 const packageJson = readJson('package.json')
 const fontFiles = existsSync(join(root, 'src/assets/fonts'))
   ? readdirSync(join(root, 'src/assets/fonts'))
@@ -519,11 +529,75 @@ check('Typographie', 'Feuille des polices chargée avant la feuille globale',
 check('Typographie', 'Nunito Sans appliquée aux écrans principaux',
   /body \{[^}]*font-family:'Nunito Sans Variable'/u.test(globalsCss) &&
   /--font-read:'Nunito Sans Variable'/u.test(globalsCss))
-check('Typographie', 'Barre latérale figée sur sa police et sa taille d’origine',
-  /\.sidebar \{[^}]*font-family:Arial,Helvetica,sans-serif; font-size:13px/u.test(globalsCss))
+check('Typographie', 'Barre latérale : Arial conservée, échelle ×1,5 appliquée',
+  ruleBody('.sidebar').includes('font-family:Arial,Helvetica,sans-serif') &&
+  ruleBody('.sidebar').includes('font-size:18px') &&
+  ruleBody('.nav-item').includes('height:42px') &&
+  bodies('.nav-item span:nth-child(2)').some((body) => body.includes('font-size:18px')) &&
+  ruleBody('.brand strong').includes('font-size:19.5px'))
 check('Typographie', 'Paquet @fontsource absent des dépendances',
   !JSON.stringify(packageJson?.dependencies ?? {}).includes('@fontsource') &&
   !JSON.stringify(packageJson?.devDependencies ?? {}).includes('@fontsource'))
+
+/* ------------------------------------------------------------ Mise en page */
+
+const navigationTsx = read('src/app/navigation.tsx')
+const navItemCount = (navigationTsx.match(/route: ROUTES\./gu) ?? []).length
+const groupLabelCount = (navigationTsx.match(/label: '/gu) ?? []).length
+const px = (selector, property) => {
+  const match = new RegExp(`${property}:(\\d+)px`, 'u').exec(ruleBody(selector))
+  return match ? Number(match[1]) : 0
+}
+const sidebarWidth = px('.sidebar', 'width')
+const navItemHeight = px('.nav-item', 'height')
+const navGroupGap = px('.nav-group', 'margin-bottom')
+const brandMark = px('.brand-mark', 'width')
+const tableMinWidth = px('.app-table-panel .data-table', 'min-width')
+const pagePadding = Number(/padding:(\d+)px (\d+)px/u.exec(bodies('.page-content').find((body) => body.includes('padding:')) ?? '')?.[2] ?? 0)
+
+// Hauteur approximative de la barre latérale, interlignes pris au large (1,4).
+const sidebarBudget =
+  18 + // padding haut
+  16 + // padding bas
+  (brandMark + 18 + 1) + // marque + marge + filet
+  (Math.ceil(12 * 1.4) + 20 + 2 + 14 + 16) + // bandeau démo + marges
+  navItemCount * (navItemHeight + 6) + // rubriques
+  groupLabelCount * (Math.ceil(13.5 * 1.4) + 8 + navGroupGap) + // libellés de groupe
+  (13 * 2 + Math.max(42, Math.ceil(15 * 1.4) * 2 + 4) + 2) + // carte moteur
+  12 + // marge de la carte moteur
+  (14 + 42) // profil
+
+check('Mise en page', 'Barre latérale : largeur, hauteurs et marges adaptées à l’échelle ×1,5',
+  sidebarWidth === 320 && navItemHeight === 42 &&
+  ruleBody('.sidebar').includes('padding:18px 14px 16px'))
+check('Mise en page', 'Barre latérale : aucune coupe possible, navigation défilante',
+  ruleBody('.sidebar').includes('overflow:hidden') &&
+  bodies('.side-nav').some((body) => body.includes('min-height:0') && body.includes('overflow-y:auto')))
+check('Mise en page', `Barre latérale : hauteur estimée ${sidebarBudget} px pour 900 px de fenêtre`,
+  navItemCount === 9 && groupLabelCount === 3 && sidebarBudget <= 900)
+check('Mise en page', 'Applications : toutes les colonnes dimensionnées, aucun écrasement',
+  [...globalsCss.matchAll(/\.app-table-panel \.data-table th:nth-child\(\d\) \{ width:\d+px; \}/gu)].length === 7 &&
+  ruleBody('.app-table-panel .data-table').includes('table-layout:fixed'))
+check('Mise en page', 'Applications : cellules tronquées proprement au lieu de déborder',
+  ruleBody('.app-table-panel .data-table td').includes('text-overflow:ellipsis') &&
+  ruleBody('.app-table-panel .data-table td').includes('overflow:hidden') &&
+  ruleBody('.app-table-panel .data-table th').includes('white-space:normal'))
+check('Mise en page', 'Applications : défilement horizontal prévu et visible',
+  bodies('.table-wrap').some((body) => body.includes('overflow-x:auto')) &&
+  ruleBody('.app-table-panel .table-wrap').includes('overflow-x:auto'))
+check('Mise en page', 'Applications : filtres, boutons et recherche passent à la ligne',
+  ruleBody('.table-controls').includes('flex-wrap:wrap') &&
+  ruleBody('.app-table-panel .table-search').includes('min-width:180px') &&
+  ruleBody('.app-table-panel .table-search input').includes('width:100%'))
+check('Mise en page', 'Applications : le tableau tient à 1440 × 900 sans débordement de page',
+  sidebarWidth + tableMinWidth + pagePadding * 2 <= 1440)
+check('Mise en page', 'Écrans principaux : échelle ×1,5 et Nunito Sans préservées',
+  ruleBody('.page-heading h1').includes('font-size:37.5px') &&
+  ruleBody('.table-wrap td').includes('font-size:13.5px') &&
+  ruleBody('.metric-card>strong').includes('font-size:31.5px') &&
+  globalsCss.includes("--font-read:'Nunito Sans Variable'"))
+check('Mise en page', 'Aucune largeur minimale supérieure à 1010 px dans les écrans',
+  Math.max(...[...globalsCss.matchAll(/min-width:(\d+)px/gu)].map((match) => Number(match[1]))) <= 1010)
 
 /* -------------------------------------------------------------- Rapport */
 
