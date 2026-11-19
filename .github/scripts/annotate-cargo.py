@@ -14,6 +14,14 @@ from __future__ import annotations
 import re
 import sys
 
+# La console Windows des runners n'est pas en UTF-8 par défaut.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except AttributeError:  # pragma: no cover
+    pass
+
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
 MAX_BLOCKS = 9
 MAX_CHARS = 6000
 TAIL_LINES = 40
@@ -23,7 +31,12 @@ ERROR_START = re.compile(r"^error(\[E\d+\])?:")
 
 def encode(text: str) -> str:
     """Encodage attendu par les commandes de workflow GitHub Actions."""
-    return text.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+    return (
+        ANSI.sub("", text)
+        .replace("%", "%25")
+        .replace("\r", "")
+        .replace("\n", "%0A")
+    )
 
 
 def encode_property(value: str) -> str:
@@ -46,7 +59,7 @@ def main(path: str) -> int:
         with open(path, encoding="utf-8", errors="replace") as handle:
             lines = handle.read().splitlines()
     except OSError:
-        emit("Rust — journal introuvable", f"Impossible de lire {path}.")
+        emit("Rust - journal introuvable", f"Impossible de lire {path}.")
         return 1
 
     blocks: list[list[str]] = []
@@ -71,7 +84,7 @@ def main(path: str) -> int:
         blocks.append(current)
 
     if not blocks:
-        emit("Rust — échec sans message d'erreur", "\n".join(lines[-TAIL_LINES:]))
+        emit("Rust - echec sans message d erreur", "\n".join(lines[-TAIL_LINES:]))
         return 0
 
     for block in blocks[:MAX_BLOCKS]:
@@ -86,11 +99,11 @@ def main(path: str) -> int:
 
     if len(blocks) > MAX_BLOCKS:
         emit(
-            "Rust — erreurs supplémentaires",
+            "Rust - erreurs supplementaires",
             f"{len(blocks) - MAX_BLOCKS} autre(s) erreur(s). Voir le journal du job.",
         )
 
-    emit("Rust — fin du journal", "\n".join(lines[-TAIL_LINES:]))
+    emit("Rust - fin du journal", "\n".join(lines[-TAIL_LINES:]))
     print(f"{len(blocks)} bloc(s) d'erreur publié(s) en annotation.")
     return 0
 

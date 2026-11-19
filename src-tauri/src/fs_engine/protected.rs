@@ -139,6 +139,7 @@ impl ProtectionPolicy {
     pub fn blocks_traversal(&self, path: &Path) -> bool {
         self.is_protected(path)
     }
+}
 
 #[cfg(test)]
 mod tests {
@@ -164,9 +165,9 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_fichiers_reconnus() {
-        assert!(is_pseudo_file_name("PAGEFILE.SYS"));
-        assert!(is_pseudo_file_name("hiberfil.sys"));
-        assert!(!is_pseudo_file_name("rapport.sys"));
+    fn un_dossier_protege_bloque_le_parcours() {
+        let policy = ProtectionPolicy::for_tests().with_directory(Path::new("C:\\Windows\\WinSxS"));
+        assert!(policy.blocks_traversal(Path::new("C:\\Windows\\WinSxS")));
+        assert!(!policy.blocks_traversal(Path::new("C:\\Windows")));
     }
 }
