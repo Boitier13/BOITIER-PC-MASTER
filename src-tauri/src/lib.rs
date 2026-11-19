@@ -2,6 +2,7 @@
 //!
 //! Périmètre strictement en **lecture** :
 //!  - informations techniques : `app_info`, `engine_status`, `db_status`, `ping` ;
+//!  - inventaire des applications : `apps_list`, `apps_sources` ;
 //!  - exploration et inventaire : `volumes_list`, `user_folders`,
 //!    `directory_list`, `path_metadata`, `walk_start`, `walk_cancel`.
 //!
@@ -10,6 +11,7 @@
 //! élévation de privilèges n'est demandée : le processus s'exécute avec les
 //! droits de l'utilisateur courant.
 
+mod apps;
 mod commands;
 mod db;
 mod error;
@@ -34,6 +36,8 @@ pub fn run() {
             commands::fs::path_metadata,
             commands::fs::walk_start,
             commands::fs::walk_cancel,
+            commands::apps::apps_list,
+            commands::apps::apps_sources,
         ])
         .run(tauri::generate_context!())
         .expect("échec du démarrage de BOITIER PC MASTER");

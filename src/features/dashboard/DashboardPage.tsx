@@ -18,10 +18,14 @@ import { DemoLabel } from '@/components/DemoLabel'
 import { Metric } from '@/components/Metric'
 import { PageHeading } from '@/components/PageHeading'
 import { useWorkspace } from '@/data/use-workspace'
+import { useEngineMode } from '@/hooks/use-engine-mode'
+import { useServiceData } from '@/hooks/use-service-data'
 import { useVolumes } from '@/hooks/use-volumes'
 import { formatBytes, usagePercent } from '@/lib/format'
 import { ROUTES } from '@/app/routes'
+import type { AppInventory } from '@/domain/types'
 import { useAppState } from '@/store/app-state'
+import { useSystemService } from '@/store/system-service-context'
 
 /**
  * Tableau de bord.
@@ -35,6 +39,15 @@ export function DashboardPage() {
   const { openAction } = useAppState()
   const { history } = useWorkspace()
   const { volumes, loading: volumesLoading } = useVolumes()
+  const demo = useEngineMode() === 'demo'
+  const service = useSystemService()
+
+  // Compteur réel : une seule entrée demandée, le total suffit.
+  const {
+    data: appInventory,
+    loading: appsLoading,
+    error: appsError,
+  } = useServiceData<AppInventory>(() => service.listInstalledApps({ limit: 1 }), [service])
 
   const storage = useMemo(() => {
     const total = volumes.reduce((sum, volume) => sum + volume.totalBytes, 0)
@@ -86,7 +99,21 @@ export function DashboardPage() {
           detail="Dernier inventaire · aujourd’hui"
           color="violet"
         />
-        <Metric icon={AppWindow} label="Applications installées" value="42" detail="3 types d’installateurs" color="green" />
+        <Metric
+          icon={AppWindow}
+          label="Applications installées"
+          value={appsLoading || appsError ? '—' : String(appInventory?.total ?? 0)}
+          detail={
+            appsError
+              ? 'Moteur indisponible'
+              : appsLoading
+                ? 'Lecture du registre…'
+                : demo
+                  ? 'Inventaire de démonstration'
+                  : 'Registre Windows · lecture seule'
+          }
+          color="green"
+        />
       </div>
 
       <div className="dashboard-grid">

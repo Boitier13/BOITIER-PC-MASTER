@@ -49,11 +49,11 @@ describe('Mode démonstration', () => {
     const user = userEvent.setup()
     renderAt('/applications')
 
-    expect(screen.getByText('9 applications')).toBeInTheDocument()
+    expect(await screen.findByText('9 applications')).toBeInTheDocument()
 
     await user.type(screen.getByLabelText('Rechercher une application'), 'chrome')
 
-    expect(screen.getByText('1 applications')).toBeInTheDocument()
+    expect(await screen.findByText('1 application')).toBeInTheDocument()
     expect(screen.getByText('Google Chrome')).toBeInTheDocument()
     expect(screen.queryByText('Mozilla Firefox')).not.toBeInTheDocument()
   })
@@ -73,7 +73,7 @@ describe('Mode démonstration', () => {
     const uninstallButton = screen.getByRole('button', { name: 'Désinstaller' })
     expect(uninstallButton).toBeDisabled()
 
-    await user.click(screen.getByText('Google Chrome'))
+    await user.click(await screen.findByText('Google Chrome'))
     await user.click(screen.getByRole('button', { name: 'Désinstaller' }))
 
     const dialog = screen.getByRole('dialog')

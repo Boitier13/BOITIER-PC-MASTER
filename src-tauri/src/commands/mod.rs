@@ -4,5 +4,6 @@
 //! il n'existe aucune commande générique capable d'exécuter un chemin, un
 //! programme ou une clé de registre fournie par l'interface.
 
+pub mod apps;
 pub mod fs;
 pub mod system;

@@ -1,5 +1,7 @@
 import type {
-  AppQuery,
+  AppInfo,
+  AppInventory,
+  AppListQuery,
   CleanupPlan,
   DirectoryListing,
   EngineMode,
@@ -7,7 +9,6 @@ import type {
   HistoryEntry,
   InstalledApp,
   ListOptions,
-  Paged,
   Residue,
   ScanProgress,
   Settings,
@@ -104,7 +105,10 @@ export interface WalkHandlers {
 export interface SystemService {
   readonly mode: EngineMode
 
+  /** Informations du binaire (nom, version, plateforme) — jamais devinées. */
+  getAppInfo(): Promise<AppInfo>
   getCapabilities(): Promise<SystemCapabilities>
+  /** Aller-retour IPC minimal : sert au diagnostic de connexion. */
   ping(): Promise<string>
 
   /* --- Exploration (lecture seule) --------------------------------- */
@@ -122,7 +126,7 @@ export interface SystemService {
   walk(request: WalkRequest, handlers?: WalkHandlers): Promise<WalkResult>
 
   /* --- Applications et résidus (phases ultérieures) ----------------- */
-  listInstalledApps(query?: AppQuery): Promise<Paged<InstalledApp>>
+  listInstalledApps(query?: AppListQuery): Promise<AppInventory>
   listResidues(appId?: string): Promise<Residue[]>
   listHistory(): Promise<HistoryEntry[]>
 

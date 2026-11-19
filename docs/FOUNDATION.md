@@ -226,3 +226,45 @@ Les bugs de maquette conservés par la phase 1 (B1, B2, B6, B8, interrupteurs ho
 React, compteur « 24 ») restent inchangés **hors** de l'écran Explorateur : B2
 (icônes déduites de l'index) et B6 (tri absent) y sont corrigés, puisque la
 mission 3 consistait précisément à remplacer cette maquette par un moteur réel.
+
+---
+
+## 11. Applications installées et diagnostic du moteur (lot C1)
+
+### 11.1 Inventaire réel, en lecture seule
+
+| Élément | Avant | Après |
+|---|---|---|
+| Source des applications | fixtures `demo.ts` uniquement | registre Windows (`Uninstall`), 3 vues, lecture seule |
+| Type `InstalledApp` | libellés pré-formatés (`sizeLabel`, `installedAt`) | valeurs typées (`sizeBytes`, `installedAtMs`, `scope`, `architecture`) |
+| Filtrage / tri / pagination | dans le composant | dans le moteur Rust (`apps_list`) |
+| Écran Applications | fixtures, mention « Données de démonstration » | données réelles, ou état d'erreur explicite |
+| Capacité `installedApps` | `false` | `true` (mesurée, pas déclarative) |
+| État du moteur | texte figé « Non connecté » | sonde réelle `app_info` + `engine_status` + `ping` |
+| Diagnostic | inexistant | panneau **Paramètres › Diagnostic moteur** |
+
+Dépendance ajoutée : `winreg 0.52`, limitée à `cfg(windows)` et confinée à
+`src-tauri/src/apps/windows.rs`, avec `KEY_READ` uniquement. La règle de
+fondation « aucun accès registre » devient donc « **aucune écriture** de
+registre », vérifiée par `scripts/check-foundation.mjs` (`set_value`,
+`create_subkey`, `delete_subkey`, `RegSetValue`, `RegDelete` interdits).
+
+### 11.2 Ce que l'interface n'affiche plus
+
+- plus aucun chiffre d'applications écrit en dur (`42`) : le compteur vient de
+  `apps_list`, ou affiche `—` si le moteur est indisponible ;
+- plus de statut « Non connecté » figé : quatre états mesurés
+  (`probing`, `connected`, `demo`, `unavailable`) ;
+- plus de profil inventé : le nom affiché provient du dossier personnel réel
+  (`user_folders`), ou « Session locale » si la lecture échoue ;
+- plus de badge « 3 » sur la désinstallation avancée.
+
+### 11.3 Limites assumées
+
+1. **Applications MSIX/Store non inventoriées** (elles ne figurent pas dans les
+   clés `Uninstall`) — lot ultérieur.
+2. **Taille approximative** : `EstimatedSize` fournie par Windows, affichée avec
+   le préfixe `≈` ; jamais estimée par balayage de dossier.
+3. **Autres comptes utilisateurs non lus** (pas de montage de ruche).
+4. **Aucune désinstallation exécutée** : la commande déclarée est affichée,
+   jamais lancée.

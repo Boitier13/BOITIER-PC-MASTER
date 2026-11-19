@@ -4,16 +4,24 @@ export const disks = [
   { letter: 'E:', name: 'Archives', type: 'HDD', total: 1863, used: 1042, free: 821, color: '#8b78ef' },
 ]
 
-export const apps = [
-  { name: 'Microsoft 365 - fr-fr', publisher: 'Microsoft Corporation', version: '16.0.17928.20114', date: '12/11/2026', size: '2,84 Go', type: 'MSI', state: 'Installé' },
-  { name: 'Adobe Photoshop 2025', publisher: 'Adobe Inc.', version: '26.1.0', date: '08/11/2026', size: '4,12 Go', type: 'Installateur', state: 'Installé' },
-  { name: 'Google Chrome', publisher: 'Google LLC', version: '131.0.6778.86', date: '06/11/2026', size: '1,08 Go', type: 'MSI', state: 'Installé' },
-  { name: 'Mozilla Firefox', publisher: 'Mozilla Corporation', version: '132.0.2', date: '04/11/2026', size: '612 Mo', type: 'MSI', state: 'Installé' },
-  { name: 'Visual Studio Code', publisher: 'Microsoft Corporation', version: '1.95.3', date: '02/11/2026', size: '486 Mo', type: 'Inno Setup', state: 'Installé' },
-  { name: 'Spotify', publisher: 'Spotify AB', version: '1.2.52.442', date: '29/10/2026', size: '312 Mo', type: 'MSIX', state: 'Installé' },
-  { name: 'VLC media player', publisher: 'VideoLAN', version: '3.0.21', date: '21/10/2026', size: '184 Mo', type: 'NSIS', state: 'Installé' },
-  { name: '7-Zip 24.09', publisher: 'Igor Pavlov', version: '24.09', date: '18/10/2026', size: '8,2 Mo', type: 'MSI', state: 'Installé' },
-  { name: 'NVIDIA Graphics Driver', publisher: 'NVIDIA Corporation', version: '566.14', date: '14/10/2026', size: '1,62 Go', type: 'Pilote', state: 'Système' },
+export const apps: Array<{
+  name: string
+  publisher: string
+  version: string
+  installedAtMs: number
+  sizeBytes: number
+  installerType: 'msi' | 'exe' | 'msix' | 'unknown'
+  scope: 'machine' | 'user'
+}> = [
+  { name: 'Microsoft 365 - fr-fr', publisher: 'Microsoft Corporation', version: '16.0.17928.20114', installedAtMs: Date.UTC(2026, 10, 12), sizeBytes: 3_050_000_000, installerType: 'msi', scope: 'machine' },
+  { name: 'Adobe Photoshop 2025', publisher: 'Adobe Inc.', version: '26.1.0', installedAtMs: Date.UTC(2026, 10, 8), sizeBytes: 4_424_000_000, installerType: 'exe', scope: 'machine' },
+  { name: 'Google Chrome', publisher: 'Google LLC', version: '131.0.6778.86', installedAtMs: Date.UTC(2026, 10, 6), sizeBytes: 1_160_000_000, installerType: 'msi', scope: 'machine' },
+  { name: 'Mozilla Firefox', publisher: 'Mozilla Corporation', version: '132.0.2', installedAtMs: Date.UTC(2026, 10, 4), sizeBytes: 641_000_000, installerType: 'msi', scope: 'machine' },
+  { name: 'Visual Studio Code', publisher: 'Microsoft Corporation', version: '1.95.3', installedAtMs: Date.UTC(2026, 10, 2), sizeBytes: 510_000_000, installerType: 'exe', scope: 'user' },
+  { name: 'Spotify', publisher: 'Spotify AB', version: '1.2.52.442', installedAtMs: Date.UTC(2026, 9, 29), sizeBytes: 327_000_000, installerType: 'msix', scope: 'user' },
+  { name: 'VLC media player', publisher: 'VideoLAN', version: '3.0.21', installedAtMs: Date.UTC(2026, 9, 21), sizeBytes: 193_000_000, installerType: 'exe', scope: 'machine' },
+  { name: '7-Zip 24.09', publisher: 'Igor Pavlov', version: '24.09', installedAtMs: Date.UTC(2026, 9, 18), sizeBytes: 8_600_000, installerType: 'msi', scope: 'machine' },
+  { name: 'NVIDIA Graphics Driver', publisher: 'NVIDIA Corporation', version: '566.14', installedAtMs: Date.UTC(2026, 9, 14), sizeBytes: 1_740_000_000, installerType: 'exe', scope: 'machine' },
 ]
 
 export const explorerItems = [

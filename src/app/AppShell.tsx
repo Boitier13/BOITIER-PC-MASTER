@@ -14,6 +14,8 @@ import {
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { NAV_GROUPS } from '@/app/navigation'
 import { ROUTES, ROUTE_LABELS, type RoutePath } from '@/app/routes'
+import { useEngineDiagnostics, type EngineDiagnostics } from '@/hooks/use-engine-diagnostics'
+import type { ReactNode } from 'react'
 import { useEngineMode } from '@/hooks/use-engine-mode'
 import { useAppState } from '@/store/app-state'
 
@@ -30,6 +32,16 @@ export function AppShell() {
   const { dark, query, setQuery, dialog, closeDialog, toast, clearToast, notify } = useAppState()
   const engineMode = useEngineMode()
   const demo = engineMode === 'demo'
+  const engine = useEngineDiagnostics()
+
+  const engineView = describeEngine(engine)
+  const userName = userNameFromPath(engine.homePath)
+  const userInitials = userName
+    .split(/\s+/)
+    .map((part) => part.charAt(0))
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
 
   const currentPath = location.pathname as RoutePath
   const currentLabel = ROUTE_LABELS[currentPath] ?? ROUTE_LABELS[ROUTES.dashboard]
@@ -73,7 +85,6 @@ export function AppShell() {
                 >
                   <item.icon size={17} />
                   <span>{item.title}</span>
-                  {item.title === 'Désinstallation avancée' && <span className="nav-count">3</span>}
                 </button>
               ))}
             </div>
@@ -81,21 +92,19 @@ export function AppShell() {
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="engine-card">
-            <div className="engine-icon">
-              <Unplug size={17} />
-            </div>
+          <div className={`engine-card engine-${engine.state}`} title={engineView.hint}>
+            <div className="engine-icon">{engineView.icon}</div>
             <div>
-              <strong>Moteur système</strong>
-              <span>Non connecté</span>
+              <strong>{engineView.title}</strong>
+              <span>{engineView.detail}</span>
             </div>
             <span className="engine-status" />
           </div>
-          <div className="profile">
-            <div className="avatar">AL</div>
+          <div className="profile" title={engine.homePath ?? 'Profil Windows non lisible'}>
+            <div className="avatar">{userInitials || '—'}</div>
             <div>
-              <strong>Alexandre Laurent</strong>
-              <span>Administrateur</span>
+              <strong>{userName}</strong>
+              <span>{demo ? 'Démonstration' : engine.homePath ? 'Profil Windows' : 'Profil non lisible'}</span>
             </div>
             <MoreHorizontal size={18} />
           </div>
@@ -212,4 +221,53 @@ export function AppShell() {
       )}
     </div>
   )
+}
+
+/**
+ * Libellé de la carte moteur : dérivé de la sonde réelle, jamais écrit en dur.
+ */
+function describeEngine(engine: EngineDiagnostics): {
+  icon: ReactNode
+  title: string
+  detail: string
+  hint: string
+} {
+  switch (engine.state) {
+    case 'demo':
+      return {
+        icon: <Info size={17} />,
+        title: 'Mode démonstration',
+        detail: 'Aucune lecture système',
+        hint: 'Les données affichées sont fictives et étiquetées comme telles.',
+      }
+    case 'probing':
+      return {
+        icon: <Unplug size={17} />,
+        title: 'Connexion…',
+        detail: 'Vérification du moteur',
+        hint: 'Interrogation du moteur système en cours.',
+      }
+    case 'connected':
+      return {
+        icon: <ShieldCheck size={17} />,
+        title: 'Moteur Rust connecté',
+        detail: `Lecture seule · ${engine.volumeCount ?? 0} volume(s)`,
+        hint: `Moteur ${engine.info?.version ?? 'inconnu'} — ${engine.info?.platform ?? ''}/${engine.info?.arch ?? ''}`,
+      }
+    case 'unavailable':
+    default:
+      return {
+        icon: <AlertTriangle size={17} />,
+        title: 'Moteur indisponible',
+        detail: 'Paramètres › Diagnostic',
+        hint: engine.error?.userMessage ?? 'Le moteur système n’a pas répondu.',
+      }
+  }
+}
+
+/** Dernier segment du dossier personnel : C:\Users\alice → alice. */
+function userNameFromPath(homePath: string | null): string {
+  if (!homePath) return 'Session locale'
+  const segments = homePath.split(/[\\/]+/).filter(Boolean)
+  return segments.length > 0 ? segments[segments.length - 1] : 'Session locale'
 }

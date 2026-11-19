@@ -10,7 +10,7 @@
  * Usage : node scripts/check-foundation.mjs
  */
 
-import { readFileSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse as parseToml } from 'smol-toml'
 
@@ -158,8 +158,8 @@ if (cargo) {
   const depsStr = JSON.stringify(cargo.dependencies ?? {})
   check(
     'Rust',
-    'Aucun accès système dangereux déclaré (fs/shell/process/registry)',
-    !/plugin-(fs|shell|process)|windows-registry|winreg/.test(depsStr),
+    'Aucun accès système dangereux déclaré (fs/shell/process)',
+    !/plugin-(fs|shell|process)|windows-registry/.test(depsStr),
   )
   check('Rust', 'SQLite non activé (phase 1)', !/rusqlite|tauri-plugin-sql/.test(depsStr), '')
 }
@@ -176,7 +176,7 @@ const rustSources = [
 const rustCode = rustSources.map((file) => read(file)).join('\n')
 
 check('Rust', 'Aucune commande de suppression', !/remove_dir_all|remove_file|std::fs::remove/.test(rustCode))
-check('Rust', 'Aucun accès registre', !/RegDelete|RegSetValue|winreg/.test(rustCode))
+check('Rust', 'Aucune écriture de registre', !/RegDelete|RegSetValue|set_value|create_subkey|delete_subkey/.test(rustCode))
 check('Rust', 'Aucune exécution de processus', !/Command::new|ShellExecute|CreateProcess/.test(rustCode))
 check('Rust', 'Aucune demande d’élévation', !/runas|requireAdministrator|ShellExecuteW/.test(rustCode))
 check('Rust', 'Aucune écriture fichier', !/fs::write|File::create/.test(rustCode))
@@ -345,6 +345,59 @@ check('CI', 'Workflow GitHub Actions : tests web et compilation Windows',
   read('.github/workflows/ci.yml').includes('windows-latest') &&
   read('.github/workflows/ci.yml').includes('cargo test') &&
   read('.github/workflows/ci.yml').includes('pnpm test'))
+
+/* ------------------------------------------------------------- Applications */
+
+function readTree(directory) {
+  const absolute = join(root, directory)
+  if (!existsSync(absolute)) return []
+  const files = []
+  for (const entry of readdirSync(absolute, { withFileTypes: true })) {
+    const relativePath = join(directory, entry.name)
+    if (entry.isDirectory()) files.push(...readTree(relativePath))
+    else if (entry.name.endsWith('.rs')) files.push(relativePath)
+  }
+  return files
+}
+
+const allRustFiles = readTree('src-tauri/src')
+const allRustCode = allRustFiles.map((file) => read(file)).join('\n')
+
+/** Code sans commentaires : une phrase de documentation ne doit pas déclencher
+ *  une alerte de sécurité (ni la masquer). */
+function stripComments(source) {
+  return source
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*$/, ''))
+    .join('\n')
+}
+
+const allRustCodeOnly = stripComments(allRustCode)
+const applicationsPage = read('src/features/applications/ApplicationsPage.tsx')
+
+check('Applications', 'Inventaire réel : commandes déclarées et exposées',
+  allRustCode.includes('commands::apps::apps_list') &&
+  allRustCode.includes('commands::apps::apps_sources') &&
+  read('src/ipc/contracts.ts').includes("appsList: 'apps_list'") &&
+  read('src/ipc/contracts.ts').includes("appsSources: 'apps_sources'"))
+check('Applications', 'Le moteur annonce la capacité « applications installées »',
+  /installed_apps:\s*true/u.test(allRustCode))
+check('Applications', 'Lecture du registre strictement en lecture seule',
+  allRustCode.includes('KEY_READ') &&
+  !/set_value|create_subkey|delete_subkey|RegSetValue|RegDelete/u.test(allRustCodeOnly) &&
+  !/std::process|Command::new|powershell|cmd\.exe/iu.test(allRustCodeOnly))
+check('Applications', 'L’écran Applications ne lit plus les fixtures de démonstration',
+  /from '@\/hooks\/use-installed-apps'/u.test(applicationsPage) &&
+  !/useWorkspace/u.test(applicationsPage) &&
+  /ServiceError/u.test(applicationsPage))
+check('Applications', 'État du moteur mesuré, plus jamais écrit en dur',
+  existsSync(join(root, 'src/hooks/use-engine-diagnostics.ts')) &&
+  read('src/hooks/use-engine-diagnostics.ts').includes('service.getCapabilities()') &&
+  !/Non connecté/u.test(read('src/app/AppShell.tsx')) &&
+  read('src/features/settings/SettingsPage.tsx').includes('Relancer le diagnostic'))
+check('Applications', 'Aucune donnée fictive présentée comme réelle hors démonstration',
+  read('src/features/applications/ApplicationsPage.tsx').includes('Inventaire indisponible') &&
+  read('src/features/dashboard/DashboardPage.tsx').includes('Moteur indisponible'))
 
 /* ------------------------------------------------------------ Installateur */
 

@@ -26,6 +26,11 @@ sysinfo = "0.30"
 # Arborescences temporaires pour les tests du moteur d'exploration.
 tempfile = "3"
 
+# Lecture du registre Windows pour l'inventaire des applications : API en
+# lecture seule, aucune écriture, aucun privilège particulier.
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+
 # Aucun plugin d'accès (fs, shell, process, http). SQLite (rusqlite, feature
 # "bundled") sera ajouté avec la première migration réellement exécutée.
 

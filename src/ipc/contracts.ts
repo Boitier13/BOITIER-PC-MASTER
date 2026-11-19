@@ -107,6 +107,46 @@ export interface UserFolderPayload {
   path: string
 }
 
+/* ------------------------------------------------------------------ */
+/* Inventaire des applications (src-tauri/src/commands/apps.rs)        */
+/* ------------------------------------------------------------------ */
+
+export interface InstalledAppPayload {
+  id: string
+  name: string
+  publisher: string | null
+  version: string | null
+  installedAtMs: number | null
+  sizeBytes: number | null
+  installLocation: string | null
+  uninstallString: string | null
+  quietUninstallString: string | null
+  productCode: string | null
+  installerType: string
+  scope: string
+  architecture: string
+  hasUninstaller: boolean
+  registryPath: string
+}
+
+export interface AppSourceStatusPayload {
+  id: string
+  label: string
+  accessible: boolean
+  entries: number
+  denied: number
+  error: string | null
+}
+
+export interface AppInventoryPayload {
+  items: InstalledAppPayload[]
+  total: number
+  offset: number
+  limit: number
+  sources: AppSourceStatusPayload[]
+  scannedAtMs: number
+}
+
 export interface WalkStatsPayload {
   visited: number
   matched: number
@@ -146,6 +186,8 @@ export const COMMANDS = {
   pathMetadata: 'path_metadata',
   walkStart: 'walk_start',
   walkCancel: 'walk_cancel',
+  appsList: 'apps_list',
+  appsSources: 'apps_sources',
 } as const
 
 /** Événements émis par le moteur pendant un parcours. */

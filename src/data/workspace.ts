@@ -1,7 +1,6 @@
 import { apps, history, residues } from '@/data/demo'
 import { DEMO_VOLUMES } from '@/data/demo-tree'
 import type {
-  AppState,
   Confidence,
   HistoryEntry,
   HistoryKind,
@@ -33,22 +32,24 @@ const HISTORY_KIND_BY_LABEL: Record<string, HistoryKind> = {
   Surveillance: 'monitoring',
 }
 
-const APP_STATE_BY_LABEL: Record<string, AppState> = {
-  'Installé': 'installed',
-  'Système': 'system',
-}
-
 export const demoVolumes: Volume[] = DEMO_VOLUMES
 
 export const demoApps: InstalledApp[] = apps.map((app, index) => ({
-  id: `app-${index}`,
+  id: `demo-app-${index}`,
   name: app.name,
   publisher: app.publisher,
   version: app.version,
-  installedAt: app.date,
-  sizeLabel: app.size,
-  installerType: app.type,
-  state: APP_STATE_BY_LABEL[app.state] ?? 'installed',
+  installedAtMs: app.installedAtMs,
+  sizeBytes: app.sizeBytes,
+  installLocation: null,
+  uninstallString: null,
+  quietUninstallString: null,
+  productCode: null,
+  installerType: app.installerType,
+  scope: app.scope,
+  architecture: 'x64',
+  hasUninstaller: false,
+  registryPath: `DEMO\\${app.name}`,
 }))
 
 export const demoResidues: Residue[] = residues.map((residue, index) => ({

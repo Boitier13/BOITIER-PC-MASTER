@@ -1,6 +1,9 @@
 import { ChevronRight, Cpu, FileText, Folder, History, Info, Monitor, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 import { DemoLabel } from '@/components/DemoLabel'
 import { PageHeading } from '@/components/PageHeading'
+import { useEngineDiagnostics, type EngineState } from '@/hooks/use-engine-diagnostics'
+import { useEngineMode } from '@/hooks/use-engine-mode'
+import { formatDateTime } from '@/lib/format'
 import { useAppState } from '@/store/app-state'
 
 /**
@@ -14,11 +17,31 @@ import { useAppState } from '@/store/app-state'
  * Ces éléments seront rebranchés sur `SettingsService` + SQLite en phase 2,
  * avec persistance réelle et `aria-checked` synchronisé.
  */
+const ENGINE_STATE_LABEL: Record<EngineState, string> = {
+  probing: 'Vérification en cours',
+  connected: 'Connecté (moteur Rust)',
+  demo: 'Démonstration',
+  unavailable: 'Indisponible',
+}
+
+const CAPABILITY_LABELS: Array<[string, string]> = [
+  ['volumes', 'Volumes'],
+  ['fileInventory', 'Fichiers'],
+  ['installedApps', 'Applications'],
+  ['uninstall', 'Désinstallation'],
+  ['residueScan', 'Résidus'],
+  ['monitoring', 'Surveillance'],
+  ['reports', 'Rapports'],
+]
+
 export function SettingsPage() {
   const { dark, setDark, notify } = useAppState()
+  const demo = useEngineMode() === 'demo'
+  const engine = useEngineDiagnostics()
 
   const sections = [
     { icon: Monitor, title: 'Apparence' },
+    { icon: ShieldCheck, title: 'Diagnostic moteur' },
     { icon: SlidersHorizontal, title: 'Préférences d’analyse' },
     { icon: History, title: 'Historique' },
     { icon: ShieldCheck, title: 'Sécurité et confirmations' },
@@ -43,11 +66,15 @@ export function SettingsPage() {
               <button
                 className={index === 0 ? 'active' : ''}
                 key={section.title}
-                onClick={() =>
-                  index === 0
-                    ? document.getElementById('appearance')?.scrollIntoView({ behavior: 'smooth' })
-                    : notify(`${section.title} — catégorie sélectionnée`)
-                }
+                onClick={() => {
+                  if (index === 0) {
+                    document.getElementById('appearance')?.scrollIntoView({ behavior: 'smooth' })
+                  } else if (section.title === 'Diagnostic moteur') {
+                    document.getElementById('diagnostic')?.scrollIntoView({ behavior: 'smooth' })
+                  } else {
+                    notify(`${section.title} — catégorie sélectionnée`)
+                  }
+                }}
               >
                 <Icon size={16} />
                 {section.title}
@@ -169,18 +196,113 @@ export function SettingsPage() {
             </div>
           </section>
 
+          <section className="panel setting-panel" id="diagnostic">
+            <div className="setting-heading">
+              <div className="setting-icon">
+                <ShieldCheck size={18} />
+              </div>
+              <div>
+                <h2>Diagnostic du moteur</h2>
+                <p>Mesures réelles de la liaison avec le moteur Rust, sans donnée simulée.</p>
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table className="data-table">
+                <tbody>
+                  <tr>
+                    <td>Environnement</td>
+                    <td>
+                      {engine.runtime === 'tauri'
+                        ? 'Application de bureau (Tauri)'
+                        : 'Navigateur — hors application de bureau'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>État du moteur</td>
+                    <td>{ENGINE_STATE_LABEL[engine.state]}</td>
+                  </tr>
+                  <tr>
+                    <td>Version du binaire</td>
+                    <td>
+                      {engine.info
+                        ? `${engine.info.name} ${engine.info.version} (${engine.info.platform}/${engine.info.arch})`
+                        : '—'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Aller-retour IPC</td>
+                    <td>{engine.pingReply ?? '—'}</td>
+                  </tr>
+                  <tr>
+                    <td>Volumes lus</td>
+                    <td>{engine.volumeCount == null ? '—' : String(engine.volumeCount)}</td>
+                  </tr>
+                  <tr>
+                    <td>Dossier personnel</td>
+                    <td>{engine.homePath ?? '—'}</td>
+                  </tr>
+                  <tr>
+                    <td>Élévation</td>
+                    <td>{engine.capabilities?.elevation ?? '—'}</td>
+                  </tr>
+                  <tr>
+                    <td>Capacités annoncées</td>
+                    <td>
+                      {engine.capabilities
+                        ? CAPABILITY_LABELS.map(
+                            ([key, label]) =>
+                              `${label} ${engine.capabilities?.capabilities[key as keyof typeof engine.capabilities.capabilities] ? '✓' : '✗'}`,
+                          ).join(' · ')
+                        : '—'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Dernière vérification</td>
+                    <td>{formatDateTime(engine.checkedAtMs)}</td>
+                  </tr>
+                  {engine.error && (
+                    <tr>
+                      <td>Erreur</td>
+                      <td>
+                        {engine.error.userMessage} ({engine.error.code})
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <button className="button secondary" onClick={engine.refresh}>
+              <ShieldCheck size={14} /> Relancer le diagnostic
+            </button>
+
+            {demo && (
+              <p className="state-note">
+                Mode démonstration : les valeurs ci-dessus décrivent le moteur factice, pas ce PC.
+              </p>
+            )}
+          </section>
+
           <section className="panel about-card">
             <div className="brand-mark">
               <Cpu size={21} />
             </div>
             <div>
               <strong>BOITIER PC MASTER</strong>
-              <p>Version 0.9.4 · Interface de démonstration</p>
+              <p>
+                Version {engine.info?.version ?? '—'} ·{' '}
+                {demo ? 'Interface de démonstration' : 'Application de bureau, lecture seule'}
+              </p>
               <span>Explorez. Maîtrisez. Nettoyez.</span>
             </div>
             <button
               className="button secondary"
-              onClick={() => notify('BOITIER PC MASTER — version de démonstration 0.9.4')}
+              onClick={() =>
+                notify(
+                  `BOITIER PC MASTER ${engine.info?.version ?? ''} — ${demo ? 'démonstration' : 'moteur local, lecture seule'}`,
+                )
+              }
             >
               À propos <Info size={14} />
             </button>

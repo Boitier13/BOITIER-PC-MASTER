@@ -175,6 +175,8 @@ describe('Client IPC', () => {
     const commands = Object.values(COMMANDS).sort()
     expect(commands).toEqual([
       'app_info',
+      'apps_list',
+      'apps_sources',
       'db_status',
       'directory_list',
       'engine_status',

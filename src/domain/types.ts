@@ -166,15 +166,49 @@ export type SortDirection = 'asc' | 'desc'
 
 export type AppState = 'installed' | 'system'
 
+/**
+ * Application installée, telle que lue dans le registre Windows.
+ *
+ * Toutes les valeurs peuvent être inconnues : une information absente reste
+ * `null`, elle n'est jamais remplacée par une valeur plausible.
+ */
 export interface InstalledApp {
+  /** Identifiant stable : ruche + chemin exact de la clé de registre. */
   id: string
   name: string
-  publisher: string
-  version: string
-  installedAt: string
-  sizeLabel: string
-  installerType: string
-  state: AppState
+  publisher: string | null
+  version: string | null
+  /** `InstallDate` (AAAAMMJJ) converti en millisecondes epoch. */
+  installedAtMs: number | null
+  /** Taille déclarée par Windows (`EstimatedSize`), en octets. */
+  sizeBytes: number | null
+  installLocation: string | null
+  uninstallString: string | null
+  quietUninstallString: string | null
+  productCode: string | null
+  installerType: 'msi' | 'exe' | 'msix' | 'unknown'
+  scope: 'machine' | 'user'
+  architecture: 'x64' | 'x86' | 'arm64' | 'unknown'
+  hasUninstaller: boolean
+  /** Chemin de la clé de registre, pour le diagnostic uniquement. */
+  registryPath: string
+}
+
+/** État d'une ruche de registre interrogée. */
+export interface AppSourceStatus {
+  id: string
+  label: string
+  accessible: boolean
+  entries: number
+  /** Sous-clés refusées par Windows (ACL) : jamais bloquant. */
+  denied: number
+  error: string | null
+}
+
+/** Page d'inventaire, accompagnée de la provenance des données. */
+export interface AppInventory extends Paged<InstalledApp> {
+  sources: AppSourceStatus[]
+  scannedAtMs: number
 }
 
 export interface Residue {
@@ -219,8 +253,13 @@ export interface UninstallPlan {
   appId: string
   /** Commande prévue, toujours affichée à l'utilisateur avant exécution. */
   command: string
+  quietCommand: string | null
+  productCode: string | null
+  installerType: InstalledApp['installerType']
   requiresElevation: boolean
   expectedResidues: number
+  /** Avertissements affichés tels quels (commande absente, chemin introuvable…). */
+  warnings: string[]
 }
 
 export interface CleanupPlan {
@@ -238,6 +277,16 @@ export type SystemCapability =
   | 'residueScan'
   | 'monitoring'
   | 'reports'
+
+/** Informations du binaire, telles que renvoyées par le moteur Rust. */
+export interface AppInfo {
+  name: string
+  version: string
+  platform: string
+  arch: string
+  engineMode: EngineMode
+  realSystemAccess: boolean
+}
 
 export interface SystemCapabilities {
   mode: EngineMode
@@ -259,9 +308,13 @@ export interface Paged<T> {
   limit: number
 }
 
-export interface AppQuery extends PageOptions {
+export interface AppListQuery extends PageOptions {
+  /** Recherche sur le nom, l'éditeur et la version (accents ignorés). */
   search?: string
   publisher?: string
+  scope?: 'machine' | 'user'
+  architecture?: 'x64' | 'x86' | 'arm64'
+  sort?: 'name' | 'size' | 'date'
 }
 
 export interface Settings {

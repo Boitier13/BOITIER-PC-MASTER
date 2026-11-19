@@ -1,6 +1,8 @@
 import { withEntryType } from '@/domain/file-entry'
 import type {
-  AppQuery,
+  AppInfo,
+  AppInventory,
+  AppListQuery,
   CleanupPlan,
   DirectoryListing,
   EngineMode,
@@ -9,7 +11,6 @@ import type {
   HistoryEntry,
   InstalledApp,
   ListOptions,
-  Paged,
   Residue,
   Settings,
   SnapshotDiff,
@@ -24,8 +25,11 @@ import type {
 import {
   COMMANDS,
   EVENTS,
+  type AppInventoryPayload,
+  type AppInfoPayload,
   type DirectoryListingPayload,
   type EngineStatusPayload,
+  type InstalledAppPayload,
   type FileEntryPayload,
   type ScanProgressPayload,
   type UserFolderPayload,
@@ -99,6 +103,51 @@ function mapWalkResult(payload: WalkResultPayload): WalkResult {
   }
 }
 
+const INSTALLER_TYPES: InstalledApp['installerType'][] = ['msi', 'exe', 'msix', 'unknown']
+
+function mapInstallerType(value: string): InstalledApp['installerType'] {
+  return (INSTALLER_TYPES as string[]).includes(value) ? (value as InstalledApp['installerType']) : 'unknown'
+}
+
+function mapScope(value: string): InstalledApp['scope'] {
+  return value === 'user' ? 'user' : 'machine'
+}
+
+function mapArchitecture(value: string): InstalledApp['architecture'] {
+  return value === 'x86' || value === 'arm64' ? value : value === 'x64' ? 'x64' : 'unknown'
+}
+
+function mapApp(payload: InstalledAppPayload): InstalledApp {
+  return {
+    id: payload.id,
+    name: payload.name,
+    publisher: payload.publisher,
+    version: payload.version,
+    installedAtMs: payload.installedAtMs,
+    sizeBytes: payload.sizeBytes,
+    installLocation: payload.installLocation,
+    uninstallString: payload.uninstallString,
+    quietUninstallString: payload.quietUninstallString,
+    productCode: payload.productCode,
+    installerType: mapInstallerType(payload.installerType),
+    scope: mapScope(payload.scope),
+    architecture: mapArchitecture(payload.architecture),
+    hasUninstaller: payload.hasUninstaller,
+    registryPath: payload.registryPath,
+  }
+}
+
+function mapInventory(payload: AppInventoryPayload): AppInventory {
+  return {
+    items: payload.items.map(mapApp),
+    total: payload.total,
+    offset: payload.offset,
+    limit: payload.limit,
+    sources: payload.sources.map((source) => ({ ...source })),
+    scannedAtMs: payload.scannedAtMs,
+  }
+}
+
 /**
  * Moteur Windows réel (Tauri 2) — **lecture seule**.
  *
@@ -113,6 +162,10 @@ function mapWalkResult(payload: WalkResultPayload): WalkResult {
  */
 export class TauriSystemService implements SystemService {
   readonly mode: EngineMode = 'system'
+
+  async getAppInfo(): Promise<AppInfo> {
+    return invokeCommand<AppInfoPayload>(COMMANDS.appInfo)
+  }
 
   async getCapabilities(): Promise<SystemCapabilities> {
     const status = await invokeCommand<EngineStatusPayload>(COMMANDS.engineStatus)
@@ -197,8 +250,15 @@ export class TauriSystemService implements SystemService {
     }
   }
 
-  async listInstalledApps(query?: AppQuery): Promise<Paged<InstalledApp>> {
-    throw this.notImplemented('installedApps', query)
+  /**
+   * Inventaire réel des applications (registre Windows, lecture seule).
+   *
+   * Le filtrage, le tri et la pagination sont faits par le moteur : l'interface
+   * n'a jamais à manipuler l'inventaire complet d'un poste chargé.
+   */
+  async listInstalledApps(query: AppListQuery = {}): Promise<AppInventory> {
+    const payload = await invokeCommand<AppInventoryPayload>(COMMANDS.appsList, { query })
+    return mapInventory(payload)
   }
 
   async listResidues(appId?: string): Promise<Residue[]> {

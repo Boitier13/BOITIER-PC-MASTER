@@ -72,7 +72,7 @@ pub fn engine_status(state: State<'_, AppState>) -> CommandResult<EngineStatus> 
         capabilities: Capabilities {
             volumes: true,
             file_inventory: true,
-            installed_apps: false,
+            installed_apps: true,
             uninstall: false,
             residue_scan: false,
             monitoring: false,

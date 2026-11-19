@@ -11,7 +11,9 @@ import {
 import { joinPath, normalizePathKey, parentPathOf } from '@/domain/file-entry'
 import { DEFAULT_SETTINGS } from '@/domain/types'
 import type {
-  AppQuery,
+  AppInfo,
+  AppInventory,
+  AppListQuery,
   CleanupPlan,
   DirectoryListing,
   EngineMode,
@@ -110,6 +112,17 @@ export class MockSystemService implements SystemService {
   readonly mode: EngineMode = 'demo'
   private settings: Settings = { ...DEFAULT_SETTINGS }
   private readonly workspace = demoWorkspace
+
+  async getAppInfo(): Promise<AppInfo> {
+    return {
+      name: 'BOITIER PC MASTER',
+      version: '0.1.0',
+      platform: 'demo',
+      arch: 'web',
+      engineMode: 'demo',
+      realSystemAccess: false,
+    }
+  }
 
   async getCapabilities(): Promise<SystemCapabilities> {
     return {
@@ -303,12 +316,38 @@ export class MockSystemService implements SystemService {
     return { root: request.root, entries: found, stats }
   }
 
-  async listInstalledApps(query: AppQuery = {}): Promise<Paged<InstalledApp>> {
+  /**
+   * Inventaire de démonstration : mêmes filtres et même forme de réponse que
+   * le moteur réel, mais aucune lecture du registre.
+   */
+  async listInstalledApps(query: AppListQuery = {}): Promise<AppInventory> {
     const search = (query.search ?? '').trim().toLowerCase()
-    const filtered = this.workspace.apps.filter((app) =>
-      `${app.name} ${app.publisher}`.toLowerCase().includes(search),
-    )
-    return paginate(filtered, query.offset, query.limit)
+    const filtered = this.workspace.apps.filter((app) => {
+      if (query.scope && app.scope !== query.scope) return false
+      if (!search) return true
+      const haystack = `${app.name} ${app.publisher ?? ''} ${app.version ?? ''}`.toLowerCase()
+      return haystack.includes(search)
+    })
+    const sorted = [...filtered].sort((left, right) => {
+      if (query.sort === 'size') return (right.sizeBytes ?? 0) - (left.sizeBytes ?? 0)
+      if (query.sort === 'date') return (right.installedAtMs ?? 0) - (left.installedAtMs ?? 0)
+      return left.name.localeCompare(right.name, 'fr')
+    })
+    const page = paginate(sorted, query.offset, query.limit ?? sorted.length)
+    return {
+      ...page,
+      sources: [
+        {
+          id: 'demo',
+          label: 'Données de démonstration',
+          accessible: true,
+          entries: sorted.length,
+          denied: 0,
+          error: null,
+        },
+      ],
+      scannedAtMs: Date.now(),
+    }
   }
 
   async listResidues(): Promise<Residue[]> {
