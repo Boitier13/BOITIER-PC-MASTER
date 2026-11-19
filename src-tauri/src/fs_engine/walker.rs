@@ -228,7 +228,9 @@ pub fn walk(
             }
 
             if traversable && !blocked && depth < options.max_depth {
-                stack.push((item_path, depth + 1));
+                // Clone d'un dossier seulement (les fichiers ne sont jamais
+                // empilés) : `item_path` reste disponible pour la progression.
+                stack.push((item_path.clone(), depth + 1));
             }
 
             if stats.visited >= next_progress {

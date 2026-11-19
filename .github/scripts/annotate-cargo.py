@@ -22,8 +22,9 @@ except AttributeError:  # pragma: no cover
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
-MAX_BLOCKS = 9
-MAX_CHARS = 6000
+MAX_BLOCKS = 12
+MAX_CHARS = 8000
+FULL_LOG_CHARS = 30000
 TAIL_LINES = 40
 
 ERROR_START = re.compile(r"^error(\[E\d+\])?:")
@@ -84,7 +85,7 @@ def main(path: str) -> int:
         blocks.append(current)
 
     if not blocks:
-        emit("Rust - echec sans message d erreur", "\n".join(lines[-TAIL_LINES:]))
+        emit("Rust - echec sans message d erreur", "\n".join(lines)[-FULL_LOG_CHARS:])
         return 0
 
     for block in blocks[:MAX_BLOCKS]:
@@ -103,7 +104,7 @@ def main(path: str) -> int:
             f"{len(blocks) - MAX_BLOCKS} autre(s) erreur(s). Voir le journal du job.",
         )
 
-    emit("Rust - fin du journal", "\n".join(lines[-TAIL_LINES:]))
+    emit("Rust - extrait complet du journal", "\n".join(lines)[-FULL_LOG_CHARS:])
     print(f"{len(blocks)} bloc(s) d'erreur publié(s) en annotation.")
     return 0
 
