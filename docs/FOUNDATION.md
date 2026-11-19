@@ -203,3 +203,26 @@ sera corrigée sans modifier le reste du socle.
 
 Aucune de ces phases n'inclut de suppression définitive : la quarantaine
 réversible reste le seul mode de nettoyage prévu.
+
+---
+
+## 10. Phase 3 — explorateur et inventaire (implémentée)
+
+La phase 3 est désormais réalisée : voir **`docs/FEATURE_EXPLORER.md`** pour le
+détail (commandes, structures, garde-fous, tests, limites).
+
+Résumé des changements d'architecture depuis la phase 1 :
+
+| Point | Phase 1 | Phase 3 |
+|---|---|---|
+| Mode réel | `TauriSystemService` limité à `getCapabilities`/`ping` | volumes, dossiers, métadonnées, parcours annulable |
+| Mode par défaut du contexte | démonstration systématique | réel dans Tauri, démonstration hors Tauri |
+| Données de fichiers | libellés pré-formatés (`sizeLabel`, `modifiedAt`) | octets (`sizeBytes`) + horodatages UNIX (ms) |
+| Explorateur | liste plate figée, navigation inerte | navigation réelle, tri, filtres, propriétés, recherche |
+| Inventaire / tableau de bord | capacités fictives | volumes lus par le moteur (ou fictifs en démo) |
+| SQLite | non ouvert | toujours non ouvert (phase 4) |
+
+Les bugs de maquette conservés par la phase 1 (B1, B2, B6, B8, interrupteurs hors
+React, compteur « 24 ») restent inchangés **hors** de l'écran Explorateur : B2
+(icônes déduites de l'index) et B6 (tri absent) y sont corrigés, puisque la
+mission 3 consistait précisément à remplacer cette maquette par un moteur réel.

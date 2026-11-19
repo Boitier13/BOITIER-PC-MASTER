@@ -19,8 +19,9 @@ pub struct AppInfo {
 
 /// Capacités déclarées du moteur courant.
 ///
-/// Toutes à `false` en phase 1 : le frontend affiche alors les écrans en mode
-/// démonstration, sans jamais prétendre à un accès système.
+/// `volumes` et `fileInventory` sont réellement implémentés (phase 3) et en
+/// lecture seule. Les autres restent à `false` : l'interface les présente
+/// explicitement comme non disponibles plutôt que de simuler un résultat.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Capabilities {
@@ -65,11 +66,12 @@ pub fn app_info(state: State<'_, AppState>) -> CommandResult<AppInfo> {
 
 #[tauri::command]
 pub fn engine_status(state: State<'_, AppState>) -> CommandResult<EngineStatus> {
+    let mode = state.engine();
     Ok(EngineStatus {
-        mode: state.engine(),
+        mode,
         capabilities: Capabilities {
-            volumes: false,
-            file_inventory: false,
+            volumes: true,
+            file_inventory: true,
             installed_apps: false,
             uninstall: false,
             residue_scan: false,
@@ -78,7 +80,7 @@ pub fn engine_status(state: State<'_, AppState>) -> CommandResult<EngineStatus> 
         },
         // Aucun privilège administrateur n'est demandé ni requis.
         elevation: "none",
-        real_system_access: false,
+        real_system_access: mode == EngineMode::System,
     })
 }
 

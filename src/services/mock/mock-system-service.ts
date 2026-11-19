@@ -1,13 +1,24 @@
 import { demoWorkspace } from '@/data/workspace'
+import {
+  DEMO_NODES,
+  DEMO_TREE,
+  DEMO_USER_FOLDERS,
+  DEMO_VOLUMES,
+  DEMO_VOLUME_ROOTS,
+  demoEntryFromSpec,
+  type DemoNodeSpec,
+} from '@/data/demo-tree'
+import { joinPath, normalizePathKey, parentPathOf } from '@/domain/file-entry'
 import { DEFAULT_SETTINGS } from '@/domain/types'
 import type {
   AppQuery,
   CleanupPlan,
+  DirectoryListing,
   EngineMode,
-  EntryQuery,
   FileEntry,
   HistoryEntry,
   InstalledApp,
+  ListOptions,
   Paged,
   Residue,
   Settings,
@@ -15,9 +26,14 @@ import type {
   SnapshotSummary,
   SystemCapabilities,
   UninstallPlan,
+  UserFolder,
   Volume,
+  WalkOptions,
+  WalkRequest,
+  WalkResult,
+  WalkStats,
 } from '@/domain/types'
-import { ServiceError, type SystemService } from '@/services/system-service'
+import { ServiceError, type SystemService, type WalkHandlers } from '@/services/system-service'
 
 const NOT_IMPLEMENTED_CAPABILITIES: SystemCapabilities['capabilities'] = {
   volumes: false,
@@ -29,6 +45,26 @@ const NOT_IMPLEMENTED_CAPABILITIES: SystemCapabilities['capabilities'] = {
   reports: false,
 }
 
+const DEFAULT_LIST_OPTIONS: Required<ListOptions> = {
+  includeHidden: false,
+  includeSystem: true,
+  directoriesFirst: true,
+  maxEntries: 5_000,
+}
+
+/** Dossiers protégés sans contenu lisible dans la démonstration. */
+const PROTECTED_PATHS = new Set(
+  DEMO_NODES.filter((node) => node.kind === 'dir' && node.protected).map((node) =>
+    normalizePathKey(joinPath(node.parent, node.name)),
+  ),
+)
+
+const DENIED_PATHS = new Set(
+  DEMO_NODES.filter((node) => node.denied).map((node) => normalizePathKey(joinPath(node.parent, node.name))),
+)
+
+const ROOT_KEYS = new Set(DEMO_VOLUME_ROOTS.map((root) => normalizePathKey(root)))
+
 function paginate<T>(items: T[], offset = 0, limit = items.length): Paged<T> {
   return {
     items: items.slice(offset, offset + limit),
@@ -38,12 +74,37 @@ function paginate<T>(items: T[], offset = 0, limit = items.length): Paged<T> {
   }
 }
 
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds)
+  })
+}
+
+function fullPathOf(spec: DemoNodeSpec): string {
+  return joinPath(spec.parent, spec.name)
+}
+
+function matchesSearch(entry: FileEntry, search: string): boolean {
+  return entry.name.toLowerCase().includes(search)
+}
+
+function sortEntries(entries: FileEntry[], directoriesFirst: boolean): FileEntry[] {
+  return [...entries].sort((left, right) => {
+    if (directoriesFirst && left.isDirectory !== right.isDirectory) {
+      return left.isDirectory ? -1 : 1
+    }
+    return left.name.localeCompare(right.name, 'fr', { numeric: true, sensitivity: 'base' })
+  })
+}
+
 /**
  * Moteur de démonstration.
  *
- * Le comportement est strictement celui de la maquette validée : mêmes
- * collections, mêmes filtres par sous-chaîne, aucun accès au système, aucun
- * appel réseau.
+ * Il n'accède à aucun disque : il sert une arborescence fictive, mais il
+ * applique **les mêmes règles** que le moteur Windows (tri dossiers d'abord,
+ * filtres, plafond, dossiers protégés, accès refusés, liens non suivis,
+ * progression et annulation). Les écrans se comportent donc identiquement dans
+ * les deux modes.
  */
 export class MockSystemService implements SystemService {
   readonly mode: EngineMode = 'demo'
@@ -64,24 +125,182 @@ export class MockSystemService implements SystemService {
   }
 
   async listVolumes(): Promise<Volume[]> {
-    return [...this.workspace.volumes]
+    return [...DEMO_VOLUMES]
   }
 
-  async listEntries(query: EntryQuery): Promise<Paged<FileEntry>> {
-    return this.searchEntries(query)
+  async listUserFolders(): Promise<UserFolder[]> {
+    return [...DEMO_USER_FOLDERS]
   }
 
-  async searchEntries(query: EntryQuery): Promise<Paged<FileEntry>> {
-    const search = (query.search ?? '').trim().toLowerCase()
-    const typeFilter = query.typeFilter ?? 'Tous les éléments'
+  async listDirectory(path: string, options: ListOptions = {}): Promise<DirectoryListing> {
+    const settings = { ...DEFAULT_LIST_OPTIONS, ...options }
+    const key = normalizePathKey(path)
 
-    const filtered = this.workspace.entries.filter((entry) => {
-      const matchesSearch = entry.name.toLowerCase().includes(search)
-      const matchesType = typeFilter === 'Tous les éléments' || entry.type.includes(typeFilter)
-      return matchesSearch && matchesType
-    })
+    if (!key) {
+      throw new ServiceError('invalid_argument', 'Chemin vide.', undefined, 'invalid_path')
+    }
 
-    return paginate(filtered, query.offset, query.limit)
+    const fileNode = DEMO_NODES.find((node) => normalizePathKey(fullPathOf(node)) === key)
+    if (fileNode && fileNode.kind === 'file') {
+      throw new ServiceError('not_a_directory', `Ce chemin n’est pas un dossier : ${path}`, undefined, 'not_a_directory')
+    }
+
+    const specs = DEMO_TREE[key]
+    const isKnown = Boolean(specs) || ROOT_KEYS.has(key)
+
+    if (!isKnown) {
+      if (DENIED_PATHS.has(key) || PROTECTED_PATHS.has(key)) {
+        throw new ServiceError('access_denied', `Accès refusé : ${path}`, undefined, 'access_denied')
+      }
+      throw new ServiceError('not_found', `Chemin introuvable : ${path}`, undefined, 'not_found')
+    }
+
+    const raw = specs ?? []
+    let entries = raw.map((spec) => demoEntryFromSpec(spec))
+
+    if (!settings.includeHidden) {
+      entries = entries.filter((entry) => !entry.attributes.hidden)
+    }
+    if (!settings.includeSystem) {
+      entries = entries.filter((entry) => !entry.attributes.system)
+    }
+
+    const truncated = entries.length > settings.maxEntries
+    if (truncated) {
+      entries = entries.slice(0, settings.maxEntries)
+    }
+
+    return {
+      path,
+      parent: parentPathOf(path),
+      entries: sortEntries(entries, settings.directoriesFirst),
+      total: raw.length,
+      truncated,
+      denied: raw.filter((spec) => spec.denied === true).length,
+      isProtected: PROTECTED_PATHS.has(key),
+    }
+  }
+
+  async getEntryMetadata(path: string): Promise<FileEntry> {
+    const key = normalizePathKey(path)
+    const spec = DEMO_NODES.find((node) => normalizePathKey(fullPathOf(node)) === key)
+    if (spec) return demoEntryFromSpec(spec)
+
+    if (ROOT_KEYS.has(key)) {
+      return demoEntryFromSpec({
+        parent: path,
+        name: path,
+        kind: 'dir',
+        modifiedAtMs: Date.UTC(2026, 10, 19, 9, 0),
+      })
+    }
+
+    throw new ServiceError('not_found', `Chemin introuvable : ${path}`, undefined, 'not_found')
+  }
+
+  async walk(request: WalkRequest, handlers: WalkHandlers = {}): Promise<WalkResult> {
+    const started = Date.now()
+    const options: Required<WalkOptions> = {
+      maxDepth: 12,
+      maxResults: 2_000,
+      maxEntries: 200_000,
+      includeHidden: false,
+      includeSystem: true,
+      search: '',
+      category: 'all',
+      minSizeBytes: 0,
+      directoriesOnly: false,
+      ...request.options,
+    }
+
+    const rootKey = normalizePathKey(request.root)
+    if (!DEMO_TREE[rootKey] && !ROOT_KEYS.has(rootKey)) {
+      throw new ServiceError('not_found', `Chemin introuvable : ${request.root}`, undefined, 'not_found')
+    }
+
+    const search = options.search.trim().toLowerCase()
+    const visited: { spec: DemoNodeSpec; depth: number }[] = []
+    const stack: { key: string; depth: number }[] = [{ key: rootKey, depth: 0 }]
+    let skippedProtected = 0
+
+    while (stack.length > 0) {
+      const { key, depth } = stack.pop()!
+      for (const spec of DEMO_TREE[key] ?? []) {
+        visited.push({ spec, depth })
+        if (spec.kind === 'dir' && depth < options.maxDepth) {
+          const childKey = normalizePathKey(fullPathOf(spec))
+          if (PROTECTED_PATHS.has(childKey) || DENIED_PATHS.has(childKey)) {
+            skippedProtected += 1
+            continue
+          }
+          stack.push({ key: childKey, depth: depth + 1 })
+        }
+      }
+    }
+
+    const found: FileEntry[] = []
+    let cancelled = false
+    let truncated = false
+    let denied = 0
+    let processed = 0
+
+    for (let index = 0; index < visited.length; index += 1) {
+      if (handlers.signal?.aborted) {
+        cancelled = true
+        break
+      }
+
+      if (index % 3 === 0) {
+        await delay(8)
+        handlers.onProgress?.({
+          scanId: request.scanId,
+          visited: index,
+          matched: found.length,
+          current: fullPathOf(visited[index].spec),
+          elapsedMs: Date.now() - started,
+        })
+      }
+
+      processed = index + 1
+      const { spec } = visited[index]
+      if (spec.denied) {
+        denied += 1
+        continue
+      }
+
+      const entry = demoEntryFromSpec(spec)
+      if (!options.includeHidden && entry.attributes.hidden) continue
+      if (!options.includeSystem && entry.attributes.system) continue
+      if (options.directoriesOnly && !entry.isDirectory) continue
+      if (options.category !== 'all' && entry.category !== options.category) continue
+      if (options.minSizeBytes > 0 && (entry.isDirectory || entry.sizeBytes < options.minSizeBytes)) continue
+      if (search && !matchesSearch(entry, search)) continue
+
+      if (found.length >= options.maxResults) {
+        truncated = true
+        break
+      }
+      found.push(entry)
+    }
+
+    found.sort((left, right) =>
+      left.path.localeCompare(right.path, 'fr', { numeric: true, sensitivity: 'base' }),
+    )
+
+    const stats: WalkStats = {
+      visited: processed,
+      matched: found.length,
+      folders: found.filter((entry) => entry.isDirectory).length,
+      files: found.filter((entry) => !entry.isDirectory).length,
+      denied,
+      skippedProtected,
+      totalSizeBytes: found.reduce((total, entry) => total + (entry.isDirectory ? 0 : entry.sizeBytes), 0),
+      truncated,
+      cancelled,
+      elapsedMs: Date.now() - started,
+    }
+
+    return { root: request.root, entries: found, stats }
   }
 
   async listInstalledApps(query: AppQuery = {}): Promise<Paged<InstalledApp>> {
@@ -101,7 +320,7 @@ export class MockSystemService implements SystemService {
   }
 
   async listSnapshots(): Promise<SnapshotSummary[]> {
-    // Aucun instantané conservé : la persistance (SQLite) arrive en phase 2.
+    // Aucun instantané conservé : la persistance (SQLite) arrive en phase 4.
     return []
   }
 

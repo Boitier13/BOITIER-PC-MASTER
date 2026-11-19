@@ -14,6 +14,7 @@ import {
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { NAV_GROUPS } from '@/app/navigation'
 import { ROUTES, ROUTE_LABELS, type RoutePath } from '@/app/routes'
+import { useEngineMode } from '@/hooks/use-engine-mode'
 import { useAppState } from '@/store/app-state'
 
 /**
@@ -27,6 +28,8 @@ export function AppShell() {
   const navigate = useNavigate()
   const location = useLocation()
   const { dark, query, setQuery, dialog, closeDialog, toast, clearToast, notify } = useAppState()
+  const engineMode = useEngineMode()
+  const demo = engineMode === 'demo'
 
   const currentPath = location.pathname as RoutePath
   const currentLabel = ROUTE_LABELS[currentPath] ?? ROUTE_LABELS[ROUTES.dashboard]
@@ -54,7 +57,7 @@ export function AppShell() {
         </div>
 
         <div className="demo-banner">
-          <span className="demo-dot" /> ENVIRONNEMENT DE DÉMO
+          <span className="demo-dot" /> {demo ? 'ENVIRONNEMENT DE DÉMO' : 'MOTEUR LOCAL · LECTURE SEULE'}
         </div>
 
         <nav className="side-nav" aria-label="Navigation principale">
@@ -139,7 +142,7 @@ export function AppShell() {
         <div className="page-scroll">
           <div className="page-content">
             <div className="mobile-demo">
-              <span className="demo-dot" /> Données de démonstration · Aucune action Windows réelle
+              <span className="demo-dot" /> {demo ? 'Données de démonstration · Aucune action Windows réelle' : 'Moteur local · Lecture seule · Aucune écriture'}
             </div>
             <Outlet />
             <footer className="page-footer">
@@ -147,7 +150,10 @@ export function AppShell() {
                 BOITIER PC MASTER <b>v0.9.4</b>
               </span>
               <span>
-                <ShieldCheck size={13} /> Démonstration locale · Aucune donnée réelle n’est modifiée
+                <ShieldCheck size={13} />{' '}
+                {demo
+                  ? 'Démonstration locale · Aucune donnée réelle n’est modifiée'
+                  : 'Moteur local · Lecture seule · Aucun fichier n’est modifié'}
               </span>
             </footer>
           </div>
@@ -181,11 +187,11 @@ export function AppShell() {
             </div>
             <h2 id="modal-title">{dialog}</h2>
             <p>
-              Le moteur système Windows n’est pas encore connecté. Cette interface est une démonstration :
-              aucune opération réelle ne sera effectuée.
+              Cette action n’est pas disponible dans cette version. Aucune opération réelle ne sera effectuée :
+              aucun fichier n’est supprimé, déplacé, renommé ou modifié.
             </p>
             <div className="modal-demo-note">
-              <Info size={16} /> Données fictives — aucune modification de Windows
+              <Info size={16} /> {demo ? 'Données fictives — aucune modification de Windows' : 'Moteur local en lecture seule — aucune écriture'}
             </div>
             <div className="modal-actions">
               <button className="button secondary" onClick={closeDialog}>

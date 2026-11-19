@@ -1,0 +1,103 @@
+name: CI
+
+# Deux vérifications indépendantes :
+#  - web  : typage, tests, contrôles structurels et build Vite (rapide, Linux) ;
+#  - rust : compilation réelle et tests unitaires du moteur Windows
+#           (`windows-latest`), ce qui ne demande aucun Rust sur le PC de
+#           l'utilisateur.
+#
+# Aucune publication, aucun secret, aucune élévation de privilèges.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web — typage, tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: pnpm (version lue dans package.json)
+        uses: pnpm/action-setup@v4
+
+      - name: Node.js 22 + cache pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Installation des dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Typage TypeScript
+        run: pnpm typecheck
+
+      - name: Tests (Vitest)
+        run: pnpm test
+
+      - name: Contrôles structurels et de sécurité
+        run: pnpm check:foundation
+
+      - name: Build de production
+        run: pnpm build
+
+  rust-windows:
+    name: Rust — compilation et tests Windows
+    runs-on: windows-latest
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Toolchain Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache des dépendances Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: pnpm (version lue dans package.json)
+        uses: pnpm/action-setup@v4
+
+      - name: Node.js 22 + cache pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Installation des dépendances
+        run: pnpm install --frozen-lockfile
+
+      # `tauri::generate_context!` valide `frontendDist` à la compilation :
+      # le bundle web doit exister avant `cargo check`.
+      - name: Build du frontend
+        run: pnpm build
+
+      - name: Vérification de la compilation
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+
+      - name: Tests unitaires du moteur (lecture seule)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+      # Clippy informe sans bloquer : le premier passage réel du compilateur est
+      # déjà couvert par `cargo check` et `cargo test` ci-dessus.
+      - name: Analyse statique (clippy, informatif)
+        continue-on-error: true
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
+
+      - name: Compilation de l'application Windows
+        run: cargo build --manifest-path src-tauri/Cargo.toml --release

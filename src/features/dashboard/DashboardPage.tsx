@@ -12,12 +12,14 @@ import {
   Sparkles,
   Unplug,
 } from 'lucide-react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DemoLabel } from '@/components/DemoLabel'
 import { Metric } from '@/components/Metric'
 import { PageHeading } from '@/components/PageHeading'
 import { useWorkspace } from '@/data/use-workspace'
-import { formatGigabytes, usagePercent } from '@/lib/format'
+import { useVolumes } from '@/hooks/use-volumes'
+import { formatBytes, usagePercent } from '@/lib/format'
 import { ROUTES } from '@/app/routes'
 import { useAppState } from '@/store/app-state'
 
@@ -31,7 +33,14 @@ import { useAppState } from '@/store/app-state'
 export function DashboardPage() {
   const navigate = useNavigate()
   const { openAction } = useAppState()
-  const { volumes, history } = useWorkspace()
+  const { history } = useWorkspace()
+  const { volumes, loading: volumesLoading } = useVolumes()
+
+  const storage = useMemo(() => {
+    const total = volumes.reduce((sum, volume) => sum + volume.totalBytes, 0)
+    const free = volumes.reduce((sum, volume) => sum + volume.freeBytes, 0)
+    return { total, free, kinds: volumes.map((volume) => volume.kind).join(', ') }
+  }, [volumes])
 
   return (
     <>
@@ -48,7 +57,7 @@ export function DashboardPage() {
         </div>
         <div>
           <strong>Votre PC est prêt à être exploré</strong>
-          <p>Consultez vos disques et applications à partir de données de démonstration.</p>
+          <p>Consultez vos disques et applications, avec la même interface en démonstration et en lecture réelle.</p>
         </div>
         <button className="button primary" onClick={() => navigate(ROUTES.inventory)}>
           <HardDrive size={15} /> Explorer les disques <ChevronRight size={15} />
@@ -56,8 +65,20 @@ export function DashboardPage() {
       </div>
 
       <div className="metric-grid">
-        <Metric icon={HardDrive} label="Disques détectés" value="3" detail="SSD NVMe, SSD SATA, HDD" color="blue" />
-        <Metric icon={Database} label="Espace disponible" value="1,32 To" detail="Sur 3,21 To au total" color="cyan" />
+        <Metric
+          icon={HardDrive}
+          label="Disques détectés"
+          value={volumesLoading ? '—' : String(volumes.length)}
+          detail={storage.kinds || 'Aucun volume détecté'}
+          color="blue"
+        />
+        <Metric
+          icon={Database}
+          label="Espace disponible"
+          value={volumesLoading ? '—' : formatBytes(storage.free)}
+          detail={volumesLoading ? 'Lecture des volumes…' : `Sur ${formatBytes(storage.total)} au total`}
+          color="cyan"
+        />
         <Metric
           icon={FileText}
           label="Fichiers inventoriés"
@@ -96,15 +117,15 @@ export function DashboardPage() {
                 <div className="disk-bar-wrap">
                   <div className="disk-bar">
                     <span
-                      style={{ width: `${(volume.usedGb / volume.totalGb) * 100}%`, background: volume.accent }}
+                      style={{ width: `${usagePercent(volume.usedBytes, volume.totalBytes)}%`, background: volume.accent }}
                     />
                   </div>
                   <div className="disk-numbers">
-                    <span>{formatGigabytes(volume.usedGb)} utilisés</span>
-                    <span>{formatGigabytes(volume.freeGb)} libres</span>
+                    <span>{formatBytes(volume.usedBytes)} utilisés</span>
+                    <span>{formatBytes(volume.freeBytes)} libres</span>
                   </div>
                 </div>
-                <strong className="disk-percent">{usagePercent(volume.usedGb, volume.totalGb)}%</strong>
+                <strong className="disk-percent">{usagePercent(volume.usedBytes, volume.totalBytes)}%</strong>
               </div>
             ))}
           </div>
@@ -112,7 +133,7 @@ export function DashboardPage() {
             <span>
               <i className="legend-blue" /> Utilisé <i className="legend-muted" /> Disponible
             </span>
-            <span>Actualisé il y a 2 h</span>
+            <span>{volumesLoading ? 'Lecture des volumes…' : 'Volumes lus à l’ouverture de l’écran'}</span>
           </div>
         </section>
 

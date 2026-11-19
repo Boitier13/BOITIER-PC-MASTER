@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
-import { createSystemService, DEFAULT_ENGINE_MODE } from '@/services'
+import { createSystemService, resolveEngineMode } from '@/services'
 import type { SystemService } from '@/services/system-service'
 
 const SystemServiceContext = createContext<SystemService | null>(null)
@@ -11,7 +11,7 @@ export function SystemServiceProvider({
   children: ReactNode
   service?: SystemService
 }) {
-  const value = useMemo(() => service ?? createSystemService(DEFAULT_ENGINE_MODE), [service])
+  const value = useMemo(() => service ?? createSystemService(resolveEngineMode()), [service])
   return <SystemServiceContext.Provider value={value}>{children}</SystemServiceContext.Provider>
 }
 

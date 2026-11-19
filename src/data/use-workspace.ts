@@ -1,16 +1,12 @@
 import { demoWorkspace, type DemoWorkspace } from '@/data/workspace'
 
 /**
- * Couture de transition (phase 1).
+ * Accès synchrone aux données de démonstration restantes.
  *
- * L'interface de la maquette affichait ses données de façon synchrone. Pour
- * conserver exactement le même rendu, les écrans consomment ici l'instantané de
- * démonstration, déjà typé.
- *
- * Phase 2 : remplacement par un chargement asynchrone via `SystemService`
- * (`listVolumes`, `listEntries`…), avec états de chargement, d'erreur et de
- * progression — ce qui introduira de nouveaux états visuels, volontairement
- * absents de la phase 1.
+ * L'exploration des fichiers ne passe plus par cette couture : elle utilise le
+ * contrat `SystemService` (`listVolumes`, `listDirectory`, `walk`), identique en
+ * mode démo et en mode réel. Ce hook ne sert plus qu'aux applications, résidus
+ * et à l'historique, encore simulés en phase 3.
  */
 export function useWorkspace(): DemoWorkspace {
   return demoWorkspace

@@ -230,7 +230,124 @@ check('Icônes', 'icon.ico non vide', icoBuffer.length > 1000, `${icoBuffer.leng
 const icoCount = icoBuffer.readUInt16LE(4)
 check('Icônes', 'icon.ico multi-résolutions', icoCount >= 4, `${icoCount} images`)
 
+
+/* ------------------------------------------------- Mission 3 : exploration */
+
+const engineFiles = [
+  'src-tauri/src/fs_engine/mod.rs',
+  'src-tauri/src/fs_engine/entry.rs',
+  'src-tauri/src/fs_engine/listing.rs',
+  'src-tauri/src/fs_engine/walker.rs',
+  'src-tauri/src/fs_engine/paths.rs',
+  'src-tauri/src/fs_engine/protected.rs',
+  'src-tauri/src/fs_engine/volumes.rs',
+  'src-tauri/src/fs_engine/folders.rs',
+  'src-tauri/src/fs_engine/error.rs',
+  'src-tauri/src/commands/fs.rs',
+  'src-tauri/src/commands/mod.rs',
+  'src/features/explorer/ExplorerPage.tsx',
+  'src/features/explorer/FileTable.tsx',
+  'src/features/explorer/PropertiesPanel.tsx',
+  'src/features/explorer/use-explorer.ts',
+  'src/hooks/use-service-data.ts',
+  'src/hooks/use-volumes.ts',
+  'docs/FEATURE_EXPLORER.md',
+  '.github/workflows/ci.yml',
+]
+
+for (const file of engineFiles) {
+  check('Moteur de fichiers', `fichier présent — ${file}`, existsSync(join(root, file)))
+}
+
+/** Code de production d'un fichier Rust, sans son module de tests. */
+function productionOnly(path) {
+  const source = read(path)
+  const testStart = source.indexOf('#[cfg(test)]')
+  return testStart === -1 ? source : source.slice(0, testStart)
+}
+
+const engineProduction = engineFiles
+  .filter((file) => file.endsWith('.rs'))
+  .map((file) => productionOnly(file))
+  .join('\n')
+
+check('Moteur de fichiers', 'Aucune écriture/suppression/déplacement dans le moteur',
+  !/fs::write|File::create|remove_file|remove_dir_all|fs::rename|fs::copy|create_dir/.test(engineProduction))
+check('Moteur de fichiers', 'Aucune API Win32 destructive importée',
+  !/DeleteFile|MoveFile|SHFileOperation|RegDelete/.test(engineProduction))
+check('Moteur de fichiers', 'Liens jamais suivis (symlink_metadata, pas de follow_links)',
+  engineProduction.includes('symlink_metadata') && !/follow_links|follow_links\(true\)|\.metadata\(\).*canonicalize/.test(engineProduction))
+check('Moteur de fichiers', 'Dossiers protégés non parcourus (blocks_traversal)',
+  engineProduction.includes('blocks_traversal') && engineProduction.includes('is_protected'))
+check('Moteur de fichiers', 'Chemins longs Windows (\\\\?\\) pris en charge',
+  read('src-tauri/src/fs_engine/paths.rs').includes('\\\\\\\\?\\\\'))
+check('Moteur de fichiers', 'Annulation par AtomicBool',
+  engineProduction.includes('AtomicBool') && engineProduction.includes('register_scan') && engineProduction.includes('cancel_scan'))
+check('Moteur de fichiers', 'Bornes de parcours (profondeur, résultats, entrées)',
+  ['max_depth', 'max_results', 'max_entries'].every((field) => read('src-tauri/src/fs_engine/walker.rs').includes(field)))
+check('Moteur de fichiers', 'Progression émise sur scan://progress',
+  read('src-tauri/src/commands/fs.rs').includes('scan://progress') && read('src/ipc/contracts.ts').includes("'scan://progress'"))
+check('Moteur de fichiers', 'Erreurs d’accès exposées (EngineError)',
+  ['access_denied', 'not_found', 'not_a_directory'].every((code) => read('src-tauri/src/fs_engine/error.rs').includes(code)))
+check('Moteur de fichiers', 'Tests Rust présents (cfg(test) + tempfile)',
+  fsEngineTestFiles().filter((file) => read(file).includes('#[cfg(test)]')).length >= 5 && read('src-tauri/Cargo.toml').includes('tempfile'))
+
+function fsEngineTestFiles() {
+  return [
+    'src-tauri/src/fs_engine/entry.rs',
+    'src-tauri/src/fs_engine/listing.rs',
+    'src-tauri/src/fs_engine/walker.rs',
+    'src-tauri/src/fs_engine/paths.rs',
+    'src-tauri/src/fs_engine/protected.rs',
+    'src-tauri/src/fs_engine/volumes.rs',
+    'src-tauri/src/fs_engine/folders.rs',
+    'src-tauri/src/state.rs',
+    'src-tauri/src/commands/fs.rs',
+  ]
+}
+
+for (const command of ['volumes_list', 'user_folders', 'directory_list', 'path_metadata', 'walk_start', 'walk_cancel']) {
+  check('IPC', `commande Rust « ${command} » enregistrée`, new RegExp(`commands::fs::${command}`).test(read('src-tauri/src/lib.rs')))
+  check('IPC', `commande déclarée côté TypeScript « ${command} »`, contracts.includes(`'${command}'`))
+}
+
+const explorerSources = [
+  read('src/features/explorer/ExplorerPage.tsx'),
+  read('src/features/explorer/FileTable.tsx'),
+  read('src/features/explorer/PropertiesPanel.tsx'),
+  read('src/features/explorer/use-explorer.ts'),
+].join('\n')
+
+check('Explorateur', 'L’écran passe par le contrat SystemService',
+  explorerSources.includes('useExplorer') && read('src/features/explorer/use-explorer.ts').includes('listDirectory'))
+check('Explorateur', 'Recherche récursive branchée sur walk()',
+  read('src/features/explorer/use-explorer.ts').includes('.walk('))
+check('Explorateur', 'Annulation de recherche (AbortController)',
+  explorerSources.includes('AbortController') && explorerSources.includes('cancelScan'))
+check('Explorateur', 'Aucune action destructive déclenchée depuis l’interface',
+  !/service\.(delete|remove|move|rename|write)/.test(explorerSources) &&
+  /openAction\(`\$\{action\.name\} — opération non disponible`\)/.test(explorerSources))
+check('Explorateur', 'Propriétés réelles (taille, dates, attributs, état)',
+  read('src/features/explorer/PropertiesPanel.tsx').includes('describeAttributes') &&
+  read('src/features/explorer/PropertiesPanel.tsx').includes('formatBytes'))
+check('Explorateur', 'Mode démonstration : arborescence fictive servie par le même contrat',
+  read('src/services/mock/mock-system-service.ts').includes('async listDirectory') &&
+  read('src/services/mock/mock-system-service.ts').includes('async walk'))
+check('Explorateur', 'Moteur Tauri : volumes, dossiers, parcours branchés',
+  read('src/services/tauri/tauri-system-service.ts').includes('COMMANDS.directoryList') &&
+  read('src/services/tauri/tauri-system-service.ts').includes('COMMANDS.walkStart'))
+check('Explorateur', 'Aucune méthode destructive dans le contrat SystemService',
+  !/\b(delete|remove|rename|move)(Entry|File|Path|Directory)?\s*\(/.test(read('src/services/system-service.ts')))
+check('Explorateur', 'Volumes alimentés par le moteur (inventaire et tableau de bord)',
+  read('src/features/inventory/InventoryPage.tsx').includes('useVolumes') &&
+  read('src/features/dashboard/DashboardPage.tsx').includes('useVolumes'))
+check('CI', 'Workflow GitHub Actions : tests web et compilation Windows',
+  read('.github/workflows/ci.yml').includes('windows-latest') &&
+  read('.github/workflows/ci.yml').includes('cargo test') &&
+  read('.github/workflows/ci.yml').includes('pnpm test'))
+
 /* -------------------------------------------------------------- Rapport */
+
 
 const categories = [...new Set(results.map((result) => result.category))]
 let failures = 0

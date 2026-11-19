@@ -1,12 +1,14 @@
 import { Activity, ChevronRight, CircleHelp, Folder, HardDrive, History, Info, MoreHorizontal } from 'lucide-react'
 import { PageHeading } from '@/components/PageHeading'
-import { useWorkspace } from '@/data/use-workspace'
-import { formatGigabytes, usagePercent } from '@/lib/format'
+import { useEngineMode } from '@/hooks/use-engine-mode'
+import { useVolumes } from '@/hooks/use-volumes'
+import { formatBytes, usagePercent } from '@/lib/format'
 import { useAppState } from '@/store/app-state'
 
 /** Inventaire des disques — données de démonstration, actions simulées. */
 export function InventoryPage() {
-  const { volumes } = useWorkspace()
+  const { volumes, loading, error } = useVolumes()
+  const demo = useEngineMode() === 'demo'
   const { selectedDisk, setSelectedDisk, openAction } = useAppState()
 
   return (
@@ -24,8 +26,24 @@ export function InventoryPage() {
 
       <div className="info-banner">
         <Info size={17} />
-        <span>Vue de démonstration — les capacités affichées sont des exemples et ne proviennent pas de votre PC.</span>
+        <span>
+          {demo
+            ? 'Vue de démonstration — les capacités affichées sont des exemples et ne proviennent pas de votre PC.'
+            : 'Volumes et capacités lus sur ce PC, en lecture seule. Aucune écriture n’est effectuée sur les disques.'}
+        </span>
       </div>
+
+      {Boolean(error) && (
+        <div className="error-banner" role="alert">
+          <Info size={16} />
+          <div>
+            <strong>Volumes indisponibles</strong>
+            <span>Le moteur n’a pas pu énumérer les volumes de ce PC.</span>
+          </div>
+        </div>
+      )}
+
+      {loading && <div className="state-note">Lecture des volumes en cours…</div>}
 
       <div className="inventory-cards">
         {volumes.map((volume) => (
@@ -58,26 +76,26 @@ export function InventoryPage() {
             <div className="inventory-usage">
               <div className="usage-track">
                 <span
-                  style={{ width: `${(volume.usedGb / volume.totalGb) * 100}%`, background: volume.accent }}
+                  style={{ width: `${usagePercent(volume.usedBytes, volume.totalBytes)}%`, background: volume.accent }}
                 />
               </div>
               <div className="usage-labels">
-                <strong>{formatGigabytes(volume.usedGb)} utilisés</strong>
-                <span>{formatGigabytes(volume.totalGb)} au total</span>
+                <strong>{formatBytes(volume.usedBytes)} utilisés</strong>
+                <span>{formatBytes(volume.totalBytes)} au total</span>
               </div>
             </div>
             <div className="capacity-grid">
               <div>
                 <span>Utilisé</span>
-                <strong>{formatGigabytes(volume.usedGb)}</strong>
+                <strong>{formatBytes(volume.usedBytes)}</strong>
               </div>
               <div>
                 <span>Disponible</span>
-                <strong className="free-space">{formatGigabytes(volume.freeGb)}</strong>
+                <strong className="free-space">{formatBytes(volume.freeBytes)}</strong>
               </div>
               <div>
                 <span>Occupation</span>
-                <strong>{usagePercent(volume.usedGb, volume.totalGb)}%</strong>
+                <strong>{usagePercent(volume.usedBytes, volume.totalBytes)}%</strong>
               </div>
             </div>
             <div className="inventory-actions">

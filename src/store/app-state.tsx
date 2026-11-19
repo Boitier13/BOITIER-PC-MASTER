@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { useWorkspace } from '@/data/use-workspace'
 import type { HistoryTab } from '@/domain/labels'
-import type { FileEntry } from '@/domain/types'
 
 /** Modes de désinstallation proposés par la maquette. */
 export type UninstallMode = 'Standard' | 'Avancé' | 'Approfondi'
@@ -25,9 +24,6 @@ interface AppState {
   selectedDisk: string
   setSelectedDisk: (value: string) => void
 
-  selectedFile: FileEntry
-  setSelectedFile: (value: FileEntry) => void
-
   uninstallMode: UninstallMode
   setUninstallMode: (value: UninstallMode) => void
 
@@ -46,15 +42,8 @@ interface AppState {
   historyTab: HistoryTab
   setHistoryTab: (tab: HistoryTab) => void
 
-  /** Conservé pour parité : le tri des tableaux n'est pas implémenté (audit B6). */
-  sort: string
-  setSort: (value: string) => void
-
   expanded: boolean
   setExpanded: (value: boolean) => void
-
-  fileFilter: string
-  setFileFilter: (value: string) => void
 
   monitoring: boolean
   setMonitoring: (value: boolean) => void
@@ -68,7 +57,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [dark, setDark] = useState(true)
   const [query, setQuery] = useState('')
   const [selectedDisk, setSelectedDisk] = useState('C:')
-  const [selectedFile, setSelectedFile] = useState<FileEntry>(workspace.entries[0])
   const [uninstallMode, setUninstallMode] = useState<UninstallMode>('Avancé')
   const [selectedResidues, setSelectedResidues] = useState<string[]>([
     workspace.residues[0].id,
@@ -77,9 +65,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [dialog, setDialog] = useState('')
   const [toast, setToast] = useState('')
   const [historyTab, setHistoryTab] = useState<HistoryTab>('Tous')
-  const [sort, setSort] = useState('Nom')
   const [expanded, setExpanded] = useState(true)
-  const [fileFilter, setFileFilter] = useState('Tous les éléments')
   const [monitoring, setMonitoring] = useState(false)
 
   const notify = useCallback((message: string) => {
@@ -99,8 +85,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setQuery,
       selectedDisk,
       setSelectedDisk,
-      selectedFile,
-      setSelectedFile,
       uninstallMode,
       setUninstallMode,
       selectedResidues,
@@ -113,12 +97,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       clearToast,
       historyTab,
       setHistoryTab,
-      sort,
-      setSort,
       expanded,
       setExpanded,
-      fileFilter,
-      setFileFilter,
       monitoring,
       setMonitoring,
     }),
@@ -126,7 +106,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       dark,
       query,
       selectedDisk,
-      selectedFile,
       uninstallMode,
       selectedResidues,
       dialog,
@@ -136,9 +115,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       notify,
       clearToast,
       historyTab,
-      sort,
       expanded,
-      fileFilter,
       monitoring,
     ],
   )

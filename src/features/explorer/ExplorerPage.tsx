@@ -1,104 +1,177 @@
 import {
-  Archive,
-  ArrowDown,
+  AlertTriangle,
   ArrowUp,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
+  Eye,
+  EyeOff,
   ExternalLink,
   FileText,
   Folder,
-  FolderOpen,
   HardDrive,
-  Info,
   ListFilter,
-  Monitor,
-  MoreHorizontal,
+  Search,
   Trash2,
-  Video,
 } from 'lucide-react'
-import { useMemo } from 'react'
+import { Fragment, useMemo, useState, type FormEvent } from 'react'
 import { DemoLabel } from '@/components/DemoLabel'
 import { PageHeading } from '@/components/PageHeading'
-import { useWorkspace } from '@/data/use-workspace'
+import { CATEGORY_FILTERS, pathSegments } from '@/domain/file-entry'
+import type { FileEntry } from '@/domain/types'
+import { FileTable } from '@/features/explorer/FileTable'
+import { PropertiesPanel } from '@/features/explorer/PropertiesPanel'
+import { useExplorer } from '@/features/explorer/use-explorer'
+import { useEngineMode } from '@/hooks/use-engine-mode'
+import { formatCount, formatDuration } from '@/lib/format'
 import { useAppState } from '@/store/app-state'
 
+const ACTIONS = [
+  { name: 'Ouvrir', icon: ExternalLink },
+  { name: 'Copier', icon: Copy },
+  { name: 'Déplacer', icon: ArrowUp },
+  { name: 'Renommer', icon: FileText },
+  { name: 'Supprimer', icon: Trash2 },
+] as const
+
 /**
- * Explorateur de fichiers.
+ * Explorateur de fichiers — première fonctionnalité métier réelle.
  *
- * Comportement conservé à l'identique de la maquette, y compris ses limites
- * connues : icônes de dossier déduites de l'index de ligne (audit B2), fil
- * d'Ariane figé, boutons de navigation inertes (B5). Ces points seront traités
- * avec le moteur réel (phase 3), pas pendant la fondation.
+ * En mode réel, toutes les données proviennent du moteur Rust (`directory_list`,
+ * `walk_start`) : tailles en octets, horodatages, attributs Windows, liens et
+ * dossiers protégés, erreurs d'accès. Le mode démonstration sert une
+ * arborescence fictive mais emprunte **exactement** le même contrat.
+ *
+ * Aucune action destructive n'existe : les boutons Déplacer / Renommer /
+ * Supprimer ouvrent une explication, jamais une opération. Les liens et
+ * dossiers protégés ne sont jamais parcourus, conformément au moteur.
  */
 export function ExplorerPage() {
-  const { volumes, entries } = useWorkspace()
-  const {
-    selectedDisk,
-    setSelectedDisk,
-    selectedFile,
-    setSelectedFile,
-    query,
-    fileFilter,
-    setFileFilter,
-    expanded,
-    setExpanded,
-    openAction,
-  } = useAppState()
+  const { openAction, notify, expanded, setExpanded } = useAppState()
+  const demo = useEngineMode() === 'demo'
+  const [searchInput, setSearchInput] = useState('')
 
-  const files = useMemo(() => {
-    const search = query.toLowerCase()
-    return entries.filter(
-      (entry) =>
-        entry.name.toLowerCase().includes(search) &&
-        (fileFilter === 'Tous les éléments' || entry.type.includes(fileFilter)),
-    )
-  }, [entries, query, fileFilter])
+  const explorer = useExplorer({
+    initialPath: '',
+    onOpenFile: () => openAction('Aperçu de fichier non disponible'),
+    onProtected: () => openAction('Dossier protégé — non parcouru'),
+    onSymlink: () => openAction('Lien symbolique — non suivi'),
+  })
+
+  const segments = useMemo(() => pathSegments(explorer.path), [explorer.path])
+
+  const copyPath = async (entry: FileEntry | null) => {
+    if (!entry) {
+      notify('Sélectionnez d’abord un élément dans la liste.')
+      return
+    }
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(entry.path)
+        notify('Chemin copié dans le presse-papiers')
+        return
+      }
+      throw new Error('presse-papiers indisponible')
+    } catch {
+      openAction(`Chemin : ${entry.path}`)
+    }
+  }
+
+  const openSelected = () => {
+    if (!explorer.selected) {
+      notify('Sélectionnez d’abord un élément dans la liste.')
+      return
+    }
+    explorer.open(explorer.selected)
+  }
+
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault()
+    explorer.startScan(searchInput)
+  }
+
+  const listing = explorer.listing
+  const footerRight = explorer.scan
+    ? explorer.scan.status === 'running'
+      ? 'Recherche récursive en cours'
+      : 'Résultats de recherche'
+    : listing
+      ? `${formatCount(listing.total)} entrées${listing.truncated ? ' · tronquée' : ''}${
+          listing.denied > 0 ? ` · ${listing.denied} refus` : ''
+        }`
+      : '—'
 
   return (
     <>
       <PageHeading
         eyebrow="ESPACE DE TRAVAIL / FICHIERS"
         title="Explorateur de fichiers"
-        description="Parcourez l’inventaire simulé de vos fichiers et dossiers."
+        description={
+          demo
+            ? 'Parcourez une arborescence fictive : dossiers, tailles, dates, attributs, liens et accès refusés.'
+            : 'Parcourez vos dossiers en lecture seule : tailles, dates, attributs, liens et accès refusés.'
+        }
         action={<DemoLabel />}
       />
 
       <div className="explorer-toolbar">
         <div className="path-nav">
-          <button className="icon-button" aria-label="Précédent">
+          <button
+            className="icon-button"
+            aria-label="Précédent"
+            disabled={!explorer.canGoBack}
+            onClick={explorer.goBack}
+          >
             <ChevronLeft size={17} />
           </button>
-          <button className="icon-button" aria-label="Suivant">
+          <button
+            className="icon-button"
+            aria-label="Suivant"
+            disabled={!explorer.canGoForward}
+            onClick={explorer.goForward}
+          >
             <ChevronRight size={17} />
           </button>
-          <button className="icon-button" aria-label="Dossier parent">
+          <button
+            className="icon-button"
+            aria-label="Dossier parent"
+            disabled={!explorer.canGoUp}
+            onClick={explorer.goUp}
+          >
             <ArrowUp size={16} />
           </button>
-          <div className="path-field">
+          <div className="path-field" aria-label="Chemin courant">
             <HardDrive size={15} />
-            <span>{selectedDisk}</span>
-            <ChevronRight size={13} />
-            <span>Utilisateurs</span>
-            <ChevronRight size={13} />
-            <b>Alexandre</b>
+            {segments.length === 0 && <span>Chargement…</span>}
+            {segments.map((segment, index) => (
+              <Fragment key={segment.path}>
+                {index > 0 && <ChevronRight size={13} />}
+                <button
+                  type="button"
+                  className={`crumb ${index === segments.length - 1 ? 'current' : ''}`}
+                  onClick={() => explorer.navigate(segment.path)}
+                  title={segment.path}
+                >
+                  {segment.name}
+                </button>
+              </Fragment>
+            ))}
           </div>
         </div>
+
         <div className="explorer-actions">
-          {[
-            { name: 'Ouvrir', icon: ExternalLink },
-            { name: 'Copier', icon: Copy },
-            { name: 'Déplacer', icon: ArrowUp },
-            { name: 'Renommer', icon: FileText },
-            { name: 'Supprimer', icon: Trash2 },
-          ].map((action) => (
+          {ACTIONS.map((action) => (
             <button
               className="icon-button"
               key={action.name}
               title={action.name}
               aria-label={action.name}
-              onClick={() => openAction(action.name)}
+              onClick={() => {
+                if (action.name === 'Ouvrir') openSelected()
+                else if (action.name === 'Copier') void copyPath(explorer.selected)
+                else openAction(`${action.name} — opération non disponible`)
+              }}
             >
               <action.icon size={16} />
             </button>
@@ -110,32 +183,51 @@ export function ExplorerPage() {
         <aside className="tree-panel">
           <div className="tree-title">
             <strong>Emplacements</strong>
-            <button className="icon-button" aria-label="Réduire l’arborescence" onClick={() => setExpanded(!expanded)}>
+            <button
+              className="icon-button"
+              aria-label="Réduire l’arborescence"
+              aria-expanded={expanded}
+              onClick={() => setExpanded(!expanded)}
+            >
               <ChevronDown size={15} />
             </button>
           </div>
+
           {expanded && (
             <>
               <p className="tree-label">ACCÈS RAPIDE</p>
-              {['Bureau', 'Téléchargements', 'Documents', 'Images'].map((label, index) => (
-                <button key={label} className="tree-item">
+              {explorer.folders.map((folder) => (
+                <button
+                  key={folder.id}
+                  className={`tree-item ${explorer.path.toLowerCase() === folder.path.toLowerCase() ? 'selected' : ''}`}
+                  onClick={() => explorer.navigate(folder.path)}
+                  title={folder.path}
+                >
                   <span className="tree-color">
-                    {index === 0 ? <Monitor size={15} /> : index === 2 ? <FileText size={15} /> : <Folder size={15} />}
+                    <Folder size={15} />
                   </span>
-                  {label}
+                  {folder.label}
                 </button>
               ))}
+
               <p className="tree-label">CE PC</p>
-              {volumes.map((volume) => (
+              {explorer.volumes.map((volume) => (
                 <button
-                  className={`tree-item ${selectedDisk === volume.letter ? 'selected' : ''}`}
+                  className={`tree-item ${explorer.path.toLowerCase().startsWith(`${volume.letter.toLowerCase()}\\`) ? 'selected' : ''}`}
                   key={volume.id}
-                  onClick={() => setSelectedDisk(volume.letter)}
+                  onClick={() => explorer.navigate(`${volume.letter}\\`)}
+                  title={`${volume.label} · ${volume.filesystem ?? 'système de fichiers inconnu'}`}
                 >
                   <HardDrive size={15} />
                   {volume.letter} {volume.label}
                 </button>
               ))}
+              {explorer.volumes.length === 0 && !explorer.volumesError && (
+                <p className="tree-note">Aucun volume détecté pour le moment.</p>
+              )}
+              {Boolean(explorer.volumesError) && (
+                <p className="tree-note error">Volumes indisponibles.</p>
+              )}
             </>
           )}
         </aside>
@@ -143,97 +235,143 @@ export function ExplorerPage() {
         <section className="file-list-panel">
           <div className="file-list-toolbar">
             <strong>Éléments</strong>
+
+            <form className="table-search" onSubmit={submitSearch}>
+              <Search size={14} />
+              <input
+                aria-label="Rechercher dans ce dossier"
+                placeholder="Rechercher dans ce dossier"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
+              <button
+                type="submit"
+                className="icon-button"
+                aria-label="Lancer une recherche récursive"
+                title="Rechercher dans les sous-dossiers"
+              >
+                <Search size={14} />
+              </button>
+            </form>
+
             <select
               aria-label="Filtrer les éléments"
-              value={fileFilter}
-              onChange={(event) => setFileFilter(event.target.value)}
+              value={explorer.filter}
+              onChange={(event) => explorer.setFilter(event.target.value as typeof explorer.filter)}
             >
-              <option>Tous les éléments</option>
-              <option>Document</option>
-              <option>Archive</option>
-              <option>Vidéo</option>
+              {CATEGORY_FILTERS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
-            <button className="icon-button" aria-label="Options d’affichage">
+
+            <button
+              className="icon-button"
+              aria-label={explorer.includeHidden ? 'Masquer les éléments cachés' : 'Afficher les éléments cachés'}
+              aria-pressed={explorer.includeHidden}
+              title="Éléments cachés et système"
+              onClick={explorer.toggleHidden}
+            >
+              {explorer.includeHidden ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+
+            <button className="icon-button" aria-label="Options d’affichage" title="Options d’affichage">
               <ListFilter size={16} />
             </button>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  {['Nom', 'Type', 'Taille', 'Date de modification'].map((heading, index) => (
-                    <th key={heading} onClick={() => {}}>
-                      {heading}
-                      {index === 0 && <ArrowDown size={12} />}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {files.map((file, index) => (
-                  <tr
-                    className={selectedFile.name === file.name ? 'selected-row' : ''}
-                    key={file.id}
-                    onClick={() => setSelectedFile(file)}
-                    onDoubleClick={() => openAction('Ouvrir le dossier')}
-                  >
-                    <td>
-                      <span className={`file-icon ${index < 3 ? 'folder' : ''}`}>
-                        {index < 3 ? (
-                          <Folder size={16} />
-                        ) : file.type.includes('Vidéo') ? (
-                          <Video size={16} />
-                        ) : file.type.includes('Archive') ? (
-                          <Archive size={16} />
-                        ) : (
-                          <FileText size={16} />
-                        )}
-                      </span>
-                      <strong>{file.name}</strong>
-                    </td>
-                    <td>{file.type}</td>
-                    <td>{file.sizeLabel}</td>
-                    <td>{file.modifiedAt.split(' ').slice(0, 1).join(' ')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+
+          {explorer.scan && (
+            <div className="scan-banner" role="status" aria-live="polite">
+              <div className="scan-head">
+                <strong>
+                  Recherche « {explorer.scan.query} » dans {explorer.scan.root}
+                </strong>
+                {explorer.scan.status === 'running' ? (
+                  <button className="button ghost" onClick={explorer.cancelScan}>
+                    Annuler
+                  </button>
+                ) : (
+                  <button className="button ghost" onClick={explorer.exitScan}>
+                    Revenir au dossier
+                  </button>
+                )}
+              </div>
+
+              {explorer.scan.status === 'running' && (
+                <div className="progress-track" aria-hidden="true">
+                  <span className="progress-fill indeterminate" />
+                </div>
+              )}
+
+              <span className="scan-meta">
+                {explorer.scan.status === 'running' &&
+                  `${formatCount(explorer.scan.progress?.visited ?? 0)} éléments examinés · ${formatCount(
+                    explorer.scan.progress?.matched ?? 0,
+                  )} résultats`}
+                {explorer.scan.status === 'done' &&
+                  `${formatCount(explorer.scan.result?.stats.matched ?? 0)} résultats · ${formatCount(
+                    explorer.scan.result?.stats.visited ?? 0,
+                  )} éléments examinés · ${formatDuration(explorer.scan.result?.stats.elapsedMs ?? 0)}`}
+                {explorer.scan.status === 'cancelled' &&
+                  `Recherche annulée · ${formatCount(
+                    explorer.scan.result?.stats.matched ?? 0,
+                  )} résultats partiels`}
+                {explorer.scan.status === 'error' &&
+                  (explorer.scan.error?.userMessage ?? 'La recherche a échoué.')}
+              </span>
+
+              {explorer.scan.result?.stats.truncated && (
+                <span className="scan-warning">Résultats tronqués : 400 éléments maximum par recherche.</span>
+              )}
+            </div>
+          )}
+
+          {explorer.error && (
+            <div className="error-banner" role="alert">
+              <AlertTriangle size={16} />
+              <div>
+                <strong>Lecture impossible</strong>
+                <span>{explorer.error.userMessage}</span>
+                {explorer.error.message && <small>{explorer.error.message}</small>}
+              </div>
+              <button className="button secondary" onClick={explorer.reload}>
+                Réessayer
+              </button>
+              {explorer.canGoUp && (
+                <button className="button ghost" onClick={explorer.goUp}>
+                  Dossier parent
+                </button>
+              )}
+            </div>
+          )}
+
+          <FileTable
+            entries={explorer.entries}
+            loading={explorer.loading}
+            selectedPath={explorer.selected?.path ?? null}
+            sortKey={explorer.sortKey}
+            sortDirection={explorer.sortDirection}
+            onSort={explorer.toggleSort}
+            onSelect={explorer.select}
+            onOpen={explorer.open}
+            readOnlyLabel="Exploration en lecture seule : aucun fichier n’est modifié."
+          />
+
           <div className="table-footer">
-            <span>{files.length} éléments · Données fictives</span>
-            <span>Inventaire du 19/11/2026</span>
+            <span>
+              {explorer.entries.length} éléments · {demo ? 'Données fictives' : 'Lecture seule'}
+            </span>
+            <span>{footerRight}</span>
           </div>
         </section>
 
-        <aside className="properties-panel">
-          <div className="properties-title">
-            <strong>Propriétés</strong>
-            <MoreHorizontal size={17} />
-          </div>
-          <div className="property-preview">
-            <div className="large-file-icon">
-              <FolderOpen size={29} />
-            </div>
-            <strong>{selectedFile.name}</strong>
-            <span>{selectedFile.type}</span>
-          </div>
-          <div className="property-details">
-            {[
-              ['Taille', selectedFile.sizeLabel],
-              ['Modifié le', selectedFile.modifiedAt],
-              ['Emplacement', selectedFile.path],
-              ['Disponibilité', 'Inventorié'],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <span>{label}</span>
-                <strong>{value}</strong>
-              </div>
-            ))}
-          </div>
-          <div className="property-note">
-            <Info size={14} /> Ces propriétés proviennent d’un jeu de données fictif.
-          </div>
-        </aside>
+        <PropertiesPanel
+          entry={explorer.selected}
+          demo={demo}
+          onOpen={explorer.open}
+          onCopyPath={(entry) => void copyPath(entry)}
+        />
       </div>
     </>
   )

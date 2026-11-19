@@ -1,15 +1,19 @@
 //! Socle Rust de BOITIER PC MASTER (Tauri 2).
 //!
-//! Phase 1 — périmètre strictement en lecture d'informations techniques :
-//! `app_info`, `engine_status`, `db_status`, `ping`.
+//! Périmètre strictement en **lecture** :
+//!  - informations techniques : `app_info`, `engine_status`, `db_status`, `ping` ;
+//!  - exploration et inventaire : `volumes_list`, `user_folders`,
+//!    `directory_list`, `path_metadata`, `walk_start`, `walk_cancel`.
 //!
-//! Aucune fonction de suppression, de modification du registre ou de
-//! désinstallation n'est exposée. Aucune élévation de privilèges n'est
-//! demandée : le processus s'exécute avec les droits de l'utilisateur courant.
+//! Aucune commande de suppression, de déplacement, de renommage, d'écriture, de
+//! modification du registre ou de désinstallation n'est exposée. Aucune
+//! élévation de privilèges n'est demandée : le processus s'exécute avec les
+//! droits de l'utilisateur courant.
 
 mod commands;
 mod db;
 mod error;
+mod fs_engine;
 mod platform;
 mod state;
 
@@ -24,6 +28,12 @@ pub fn run() {
             commands::system::engine_status,
             commands::system::db_status,
             commands::system::ping,
+            commands::fs::volumes_list,
+            commands::fs::user_folders,
+            commands::fs::directory_list,
+            commands::fs::path_metadata,
+            commands::fs::walk_start,
+            commands::fs::walk_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("échec du démarrage de BOITIER PC MASTER");

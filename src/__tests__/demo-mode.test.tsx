@@ -31,7 +31,7 @@ describe('Mode démonstration', () => {
     const service = createSystemService()
     expect(await service.listVolumes()).toHaveLength(3)
     expect((await service.listInstalledApps()).total).toBe(9)
-    expect((await service.searchEntries({})).total).toBe(7)
+    expect((await service.listDirectory('C:\\Utilisateurs\\Alexandre')).entries).toHaveLength(6)
   })
 
   it('navigue entre les écrans depuis la barre latérale', async () => {
@@ -58,16 +58,12 @@ describe('Mode démonstration', () => {
     expect(screen.queryByText('Mozilla Firefox')).not.toBeInTheDocument()
   })
 
-  it('filtre les éléments de l’explorateur par type', async () => {
-    const user = userEvent.setup()
+  it('affiche le dossier de départ de l’explorateur (profil fictif)', async () => {
     renderAt('/explorer')
 
-    expect(screen.getByText('7 éléments · Données fictives')).toBeInTheDocument()
-
-    await user.selectOptions(screen.getByLabelText('Filtrer les éléments'), 'Vidéo')
-
-    expect(screen.getByText('1 éléments · Données fictives')).toBeInTheDocument()
-    expect(screen.getByText('Vidéo_démonstration.mp4')).toBeInTheDocument()
+    expect(await screen.findByText('6 éléments · Données fictives')).toBeInTheDocument()
+    expect(screen.getByText('notes_personnelles.txt')).toBeInTheDocument()
+    expect(screen.queryByText('.config_projet')).not.toBeInTheDocument()
   })
 
   it('ouvre la modale d’action et la referme', async () => {
@@ -82,7 +78,7 @@ describe('Mode démonstration', () => {
 
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByRole('heading', { name: 'Désinstaller l’application' })).toBeInTheDocument()
-    expect(dialog).toHaveTextContent('aucune opération réelle ne sera effectuée')
+    expect(dialog).toHaveTextContent(/Aucune opération réelle ne sera effectuée/i)
 
     await user.click(within(dialog).getByRole('button', { name: 'Compris' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

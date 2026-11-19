@@ -1,8 +1,8 @@
-import { apps, disks, explorerItems, history, residues } from '@/data/demo'
+import { apps, history, residues } from '@/data/demo'
+import { DEMO_VOLUMES } from '@/data/demo-tree'
 import type {
   AppState,
   Confidence,
-  FileEntry,
   HistoryEntry,
   HistoryKind,
   InstalledApp,
@@ -14,8 +14,9 @@ import type {
  * Projection typée des données de démonstration.
  *
  * Unique point de conversion entre les fixtures brutes (`demo.ts`, conservé tel
- * quel) et le modèle de domaine. Le moteur de démonstration et l'interface
- * consomment ensuite uniquement des entités typées.
+ * quel) et le modèle de domaine. L'arborescence de fichiers, elle, vit dans
+ * `demo-tree.ts` : elle est désormais structurée (chemins, tailles en octets,
+ * attributs) et non plus une simple liste plate.
  */
 
 const CONFIDENCE_BY_LABEL: Record<string, Confidence> = {
@@ -37,16 +38,7 @@ const APP_STATE_BY_LABEL: Record<string, AppState> = {
   'Système': 'system',
 }
 
-export const demoVolumes: Volume[] = disks.map((disk, index) => ({
-  id: `volume-${disk.letter.replace(':', '')}`,
-  letter: disk.letter,
-  label: disk.name,
-  kind: disk.type,
-  totalGb: disk.total,
-  usedGb: disk.used,
-  freeGb: disk.free,
-  accent: disk.color,
-}))
+export const demoVolumes: Volume[] = DEMO_VOLUMES
 
 export const demoApps: InstalledApp[] = apps.map((app, index) => ({
   id: `app-${index}`,
@@ -57,18 +49,6 @@ export const demoApps: InstalledApp[] = apps.map((app, index) => ({
   sizeLabel: app.size,
   installerType: app.type,
   state: APP_STATE_BY_LABEL[app.state] ?? 'installed',
-}))
-
-export const demoEntries: FileEntry[] = explorerItems.map((item, index) => ({
-  id: `entry-${index}`,
-  name: item.name,
-  type: item.type,
-  // Recalculé depuis le libellé de la fixture : aucun dossier n'est deviné par
-  // sa position (la donnée est disponible, l'affichage de phase 1 reste inchangé).
-  isDirectory: item.type.startsWith('Dossier'),
-  sizeLabel: item.size,
-  modifiedAt: item.date,
-  path: item.path,
 }))
 
 export const demoResidues: Residue[] = residues.map((residue, index) => ({
@@ -93,7 +73,6 @@ export const demoHistory: HistoryEntry[] = history.map((item, index) => ({
 export interface DemoWorkspace {
   volumes: Volume[]
   apps: InstalledApp[]
-  entries: FileEntry[]
   residues: Residue[]
   history: HistoryEntry[]
 }
@@ -101,7 +80,6 @@ export interface DemoWorkspace {
 export const demoWorkspace: DemoWorkspace = {
   volumes: demoVolumes,
   apps: demoApps,
-  entries: demoEntries,
   residues: demoResidues,
   history: demoHistory,
 }

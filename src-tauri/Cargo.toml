@@ -19,10 +19,15 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Énumération des volumes (aucune dépendance réseau, aucun privilège).
+sysinfo = "0.30"
 
-# Phase 1 : aucune dépendance système, aucun plugin d'accès (fs, shell, process,
-# http). SQLite (rusqlite, feature "bundled") sera ajouté en phase 2, avec la
-# première migration réellement exécutée.
+[dev-dependencies]
+# Arborescences temporaires pour les tests du moteur d'exploration.
+tempfile = "3"
+
+# Aucun plugin d'accès (fs, shell, process, http). SQLite (rusqlite, feature
+# "bundled") sera ajouté avec la première migration réellement exécutée.
 
 [profile.release]
 codegen-units = 1
