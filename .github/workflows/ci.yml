@@ -56,6 +56,9 @@ jobs:
   rust-windows:
     name: Rust — compilation et tests Windows
     runs-on: windows-latest
+    env:
+      # Sortie sans codes ANSI : les journaux restent lisibles et analysables.
+      CARGO_TERM_COLOR: never
     steps:
       - name: Récupération du dépôt
         uses: actions/checkout@v4

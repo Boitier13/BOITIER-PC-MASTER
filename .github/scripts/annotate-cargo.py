@@ -58,7 +58,8 @@ def emit(title: str, message: str, location: tuple[str, str, str] | None = None)
 def main(path: str) -> int:
     try:
         with open(path, encoding="utf-8", errors="replace") as handle:
-            lines = handle.read().splitlines()
+            # Les codes ANSI empêchent la reconnaissance de « error: ».
+            lines = [ANSI.sub("", line) for line in handle.read().splitlines()]
     except OSError:
         emit("Rust - journal introuvable", f"Impossible de lire {path}.")
         return 1
@@ -85,7 +86,9 @@ def main(path: str) -> int:
         blocks.append(current)
 
     if not blocks:
-        emit("Rust - echec sans message d erreur", "\n".join(lines)[-FULL_LOG_CHARS:])
+        # Aucun « error: » reconnu : on publie la fin du journal (GitHub
+        # tronque les messages à ~4000 caractères).
+        emit("Rust - echec sans message d erreur", "\n".join(lines)[-3600:])
         return 0
 
     # GitHub tronque les messages longs (~4000 caractères) : on publie donc
