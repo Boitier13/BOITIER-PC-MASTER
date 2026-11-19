@@ -366,6 +366,6 @@ console.log(
   `\n${results.length - failures}/${results.length} contrôles réussis.` +
     (failures === 0 ? ' Socle conforme.' : ` ${failures} contrôle(s) en échec.`),
 )
-console.log('Rappel : la compilation Rust doit être vérifiée avec `cargo check` sur une machine disposant de Rust.')
+console.log('Rappel : la compilation Rust est vérifiée par la CI GitHub Actions (job « Rust — compilation et tests Windows »).')
 
 process.exit(failures === 0 ? 0 : 1)

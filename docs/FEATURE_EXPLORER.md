@@ -108,10 +108,11 @@ protégés, accès refusés, annulation. Aucun accès disque.
 
 ## 7. Limites connues
 
-- La compilation Rust n'a pas pu être exécutée dans l'environnement de
-  développement (aucun toolchain, aucun accès à crates.io) : elle est confiée à
-  GitHub Actions (`windows-latest`), qui exécute `cargo check`, `cargo test`,
-  `cargo clippy -D warnings` et `cargo build --release`.
+- La compilation n'a pas pu être exécutée dans l'environnement de
+  développement (aucun toolchain Rust, aucun accès à crates.io) : elle est
+  vérifiée par GitHub Actions sur `windows-latest` (`cargo check --all-targets`,
+  `cargo test --lib` — 34 tests, `cargo clippy`, `cargo build --release`).
+  Dernière exécution : **succès** (run `44457145239`).
 - Pas encore d'index SQLite : les inventaires datés et les comparaisons
   utiliseront les mêmes structures (`FileEntryDto` + statistiques) en phase 4.
 - Pas de surveillance de volume (USN/MFT) : les très gros volumes sont bornés

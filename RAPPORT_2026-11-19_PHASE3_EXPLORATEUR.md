@@ -2,7 +2,8 @@
 
 **Date** : 19 novembre 2026
 **Branche de travail** : `arena/ce96ae0d-boitier-pc-master` (identique à `foundation/tauri2`, commit de base `fe8c561`)
-**État** : modifications **non commitées** (aucun commit, aucun push, `main` intacte)
+**État** : commité et poussé sur la branche de session ; `main` intacte, aucune
+fusion, aucune pull request. **CI GitHub Actions verte** (web + Rust Windows).
 **Périmètre** : lecture seule. Aucune suppression, aucun déplacement, aucune
 modification de fichier, aucune écriture disque, aucune élévation de privilèges.
 
@@ -99,7 +100,7 @@ Environnement local : Debian x86_64, Node 22.22.3, pnpm 12.3.4. **Aucun toolchai
 | `pnpm build` | succès — JS 330 kB (101,8 kB gzip), CSS 58,9 kB (12,6 kB gzip) |
 | Transform des nouveaux modules par Vite (dev) | 10 / 10 en HTTP 200 |
 | Tests Rust écrits | **34 tests** dans 9 fichiers (`fs_engine`, `state`, `commands/fs`) |
-| `cargo check` / `cargo test` / `cargo build` | **non exécutés localement** → confiés à GitHub Actions |
+| `cargo check` / `cargo test` / `cargo build` | **exécutés par GitHub Actions sur `windows-latest`** : voir § 5 bis |
 
 Détail des nouveaux tests d'interface : dossier de départ et tri, ouverture par double-clic, retour parent, historique Précédent/Suivant, tri par taille (deux sens), filtre par catégorie, éléments cachés, propriétés réelles, dossiers protégés (non parcourus), recherche récursive avec résultats, annulation de recherche, absence d'action destructive.
 
@@ -107,12 +108,49 @@ Tests du service : volumes en octets, dossiers rapides, listage trié, cachés, 
 
 ---
 
+## 5 bis. Résultats réels de la CI Windows
+
+Workflow `.github/workflows/ci.yml`, exécution finale
+[`44457145239`](https://github.com/Boitier13/BOITIER-PC-MASTER/actions/runs/44457145239)
+sur le commit `06c74df` — **succès des deux jobs** :
+
+| Job | Étapes | Résultat |
+|---|---|---|
+| **Web** (ubuntu) | typage, Vitest, contrôles structurels (146), build | ✅ succès |
+| **Rust** (windows-latest) | `cargo check --all-targets`, `cargo test --lib` (**34 tests**), `cargo clippy`, `cargo build --release` | ✅ succès |
+
+### Erreurs de compilation réellement rencontrées et corrigées
+
+Le premier passage a échoué ; chaque itération a été diagnostiquée puis
+corrigée sur la branche (8 commits au total) :
+
+| # | Erreur | Cause | Correction |
+|---|---|---|---|
+| 1 | `error: this file contains an unclosed delimiter` (`protected.rs:172`) | après extraction des politiques Windows/POSIX, le bloc `impl ProtectionPolicy` n'était plus fermé | fermeture de l'`impl` avant le module de tests |
+| 2 | `E0382: borrow of moved value: item_path` (`walker.rs:239`) | `item_path` déplacé dans la pile de parcours puis emprunté pour l'événement de progression | clonage du chemin au moment de l'empilement (dossiers uniquement) |
+| 3 | `E0599: no method named with_directory` (×4) | la même refonte avait supprimé `with_directory`, utilisée par 4 tests | méthode rétablie |
+| 4 | Test `parcours_recursif_complet` : `left: 3, right: 2` | l'arborescence de test contient trois documents (`rapport.pdf`, `budget.xlsx`, `notes.txt`) | attente corrigée et vérification des deux fichiers attendus |
+
+Aucune erreur de conception : les seuls échecs portaient sur des scories de
+refactorisation et une attente de test. `sysinfo 0.30.13`, `tauri 2.12.7` et
+`tempfile 3.27` se compilent correctement sur Windows.
+
+### Diagnostic CI ajouté au passage
+
+Les journaux de job sont hébergés hors de l'API GitHub et ne sont pas toujours
+téléchargeables. Le workflow publie donc les erreurs du compilateur en
+**annotations** (`.github/scripts/annotate-cargo.py`), lisibles via l'API et
+directement dans l'interface GitHub, avec `CARGO_TERM_COLOR=never` pour des
+journaux propres.
+
+---
+
 ## 6. Ce qui reste à vérifier (honnêteté)
 
-1. **Compilation Rust réelle** : c'est le seul point non vérifié. Le workflow `.github/workflows/ci.yml` la déclenche sur `windows-latest` (`cargo check`, `cargo test --lib`, `cargo build --release`, plus `pnpm build` requis par `tauri::generate_context!`). Si une erreur apparaît, elle sera dans le log du job `Rust — compilation et tests Windows`.
-2. **Exécution sur Windows** : apparition réelle de `C:`, `D:`, des dossiers protégés et des erreurs d'accès — non observable depuis cet environnement.
-3. **API `sysinfo 0.30`** : version épinglée volontairement bas (API stable connue) ; `Disks::new_with_refreshed_list`, `list()`, `kind()` sont les seuls points d'appel, isolés dans `volumes.rs`.
-4. **Performances sur très gros volumes** : bornées par les plafonds, mais pas mesurées.
+1. **Compilation et tests Rust** : désormais vérifiés sur Windows (`cargo check`, `cargo test --lib` — 34 tests, `cargo build --release`).
+2. **Exécution interactive sur un PC Windows** : l'affichage réel de `C:`, des dossiers protégés et des erreurs d'accès n'a pas été observé dans une session graphique (l'environnement de développement n'a ni Windows ni WebView2). C'est la seule vérification qui reste manuelle.
+3. **Performances sur très gros volumes** : bornées par les plafonds (profondeur 12, 2 000 résultats, 200 000 entrées), mais pas mesurées sur un disque de plusieurs millions de fichiers.
+4. **Clippy** : exécuté sans blocage ; quelques avertissements de style éventuels restent visibles dans le job sans faire échouer la CI.
 
 ---
 
@@ -121,7 +159,7 @@ Tests du service : volumes en octets, dossiers rapides, listage trié, cachés, 
 - Pas d'index SQLite ni d'instantanés datés (phase 4) : les données sont déjà au bon format.
 - Pas d'inventaire des applications (registre, MSI, MSIX) ni de résidus (phase 5).
 - Pas de suppression, déplacement, renommage, quarantaine : hors périmètre et interdit par la consigne.
-- Pas de commit ni de push : en attente d'autorisation explicite.
+- Aucune fusion, aucune pull request, `main` non modifiée.
 
 ---
 
@@ -137,6 +175,5 @@ pnpm build            # bundle de production
 
 Puis, pour le moteur réel :
 
-1. pousser la branche (autorisation requise) pour déclencher `.github/workflows/ci.yml` ;
-2. lire le job `Rust — compilation et tests Windows` ;
-3. sur un PC Windows avec Rust (ou via l'artefact de build), exécuter `pnpm tauri dev` : l'explorateur affiche alors les volumes et dossiers réels, en lecture seule.
+1. consulter l'exécution verte `44457145239` sur la branche de session ;
+2. sur un PC Windows avec Rust, exécuter `pnpm tauri dev` : l'explorateur affiche alors les volumes et dossiers réels, en lecture seule.
