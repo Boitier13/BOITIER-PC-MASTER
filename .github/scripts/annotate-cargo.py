@@ -88,24 +88,21 @@ def main(path: str) -> int:
         emit("Rust - echec sans message d erreur", "\n".join(lines)[-FULL_LOG_CHARS:])
         return 0
 
-    for block in blocks[:MAX_BLOCKS]:
-        location = None
-        for line in block[1:8]:
-            match = re.match(r"\s*-->\s*(.+?):(\d+):(\d+)", line)
-            if match:
-                location = (match.group(1), match.group(2), match.group(3))
-                break
-        body = "\n".join(block)
-        emit(block[0], body, location)
+    # GitHub tronque les messages longs (~4000 caractères) : on publie donc
+    # les blocs d'erreur découpés en plusieurs annotations, sans le bruit des
+    # lignes « Compiling / Downloaded ».
+    text = "\n\n".join("\n".join(block) for block in blocks)
+    chunk_size = 3800
+    chunks = [text[index : index + chunk_size] for index in range(0, len(text), chunk_size)]
+    chunks = chunks[:MAX_BLOCKS]
 
-    if len(blocks) > MAX_BLOCKS:
-        emit(
-            "Rust - erreurs supplementaires",
-            f"{len(blocks) - MAX_BLOCKS} autre(s) erreur(s). Voir le journal du job.",
-        )
+    for number, chunk in enumerate(chunks, start=1):
+        emit(f"Rust - erreurs ({number}/{len(chunks)})", chunk)
 
-    emit("Rust - extrait complet du journal", "\n".join(lines)[-FULL_LOG_CHARS:])
-    print(f"{len(blocks)} bloc(s) d'erreur publié(s) en annotation.")
+    # Dernière annotation : contexte de fin de journal (souvent « could not
+    # compile … due to N previous errors »).
+    emit("Rust - fin du journal", "\n".join(lines[-12:]))
+    print(f"{len(blocks)} bloc(s) d'erreur, {len(chunks)} annotation(s).")
     return 0
 
 
