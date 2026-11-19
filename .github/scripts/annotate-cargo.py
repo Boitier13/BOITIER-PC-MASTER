@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Publie les erreurs de compilation Rust en annotations GitHub Actions.
+
+Les journaux de job sont hébergés sur un stockage externe ; les annotations,
+elles, sont accessibles via l'API GitHub. Ce script transforme la sortie de
+`cargo` en annotations lisibles, pour que les erreurs soient exploitables même
+sans téléchargement du journal complet.
+
+Usage : python .github/scripts/annotate-cargo.py cargo-check.log
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+
+MAX_BLOCKS = 9
+MAX_CHARS = 6000
+TAIL_LINES = 40
+
+ERROR_START = re.compile(r"^error(\[E\d+\])?:")
+
+
+def encode(text: str) -> str:
+    """Encodage attendu par les commandes de workflow GitHub Actions."""
+    return text.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+
+
+def encode_property(value: str) -> str:
+    """Les propriétés d'une commande sont séparées par des virgules."""
+    return encode(value).replace(",", "%2C").replace(":", "%3A")
+
+
+def emit(title: str, message: str, location: tuple[str, str, str] | None = None) -> None:
+    properties = [f"title={encode_property(title[:180])}"]
+    if location:
+        file_name, line, column = location
+        properties.append(f"file={encode_property(file_name)}")
+        properties.append(f"line={line}")
+        properties.append(f"col={column}")
+    print(f"::error {','.join(properties)}::{encode(message[:MAX_CHARS])}")
+
+
+def main(path: str) -> int:
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        emit("Rust — journal introuvable", f"Impossible de lire {path}.")
+        return 1
+
+    blocks: list[list[str]] = []
+    current: list[str] | None = None
+
+    for line in lines:
+        if ERROR_START.match(line.strip()):
+            if current:
+                blocks.append(current)
+            current = [line]
+            continue
+        if current is None:
+            continue
+        if line.strip() == "" and len(current) > 2:
+            blocks.append(current)
+            current = None
+            continue
+        if len(current) < 25:
+            current.append(line)
+
+    if current:
+        blocks.append(current)
+
+    if not blocks:
+        emit("Rust — échec sans message d'erreur", "\n".join(lines[-TAIL_LINES:]))
+        return 0
+
+    for block in blocks[:MAX_BLOCKS]:
+        location = None
+        for line in block[1:8]:
+            match = re.match(r"\s*-->\s*(.+?):(\d+):(\d+)", line)
+            if match:
+                location = (match.group(1), match.group(2), match.group(3))
+                break
+        body = "\n".join(block)
+        emit(block[0], body, location)
+
+    if len(blocks) > MAX_BLOCKS:
+        emit(
+            "Rust — erreurs supplémentaires",
+            f"{len(blocks) - MAX_BLOCKS} autre(s) erreur(s). Voir le journal du job.",
+        )
+
+    emit("Rust — fin du journal", "\n".join(lines[-TAIL_LINES:]))
+    print(f"{len(blocks)} bloc(s) d'erreur publié(s) en annotation.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else "cargo-check.log"))

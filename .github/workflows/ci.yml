@@ -88,10 +88,26 @@ jobs:
         run: pnpm build
 
       - name: Vérification de la compilation
-        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --manifest-path src-tauri/Cargo.toml --all-targets 2>&1 | tee cargo-check.log
+
+      - name: Publication des erreurs de compilation
+        if: failure()
+        shell: bash
+        run: python .github/scripts/annotate-cargo.py cargo-check.log
 
       - name: Tests unitaires du moteur (lecture seule)
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --manifest-path src-tauri/Cargo.toml --lib 2>&1 | tee cargo-test.log
+
+      - name: Publication des échecs de tests
+        if: failure()
+        shell: bash
+        run: python .github/scripts/annotate-cargo.py cargo-test.log
 
       # Clippy informe sans bloquer : le premier passage réel du compilateur est
       # déjà couvert par `cargo check` et `cargo test` ci-dessus.

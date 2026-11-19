@@ -45,67 +45,75 @@ impl ProtectionPolicy {
     pub fn platform_default() -> Self {
         #[cfg(windows)]
         {
-            let system_drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_string());
-            let windows_dir = std::env::var("WINDIR")
-                .unwrap_or_else(|_| format!("{system_drive}\\Windows"));
-            let program_data = std::env::var("ProgramData")
-                .unwrap_or_else(|_| format!("{system_drive}\\ProgramData"));
-
-            let mut directories = Vec::new();
-            // Dossiers système à ne jamais parcourir.
-            push_unique(&mut directories, format!("{windows_dir}\\WinSxS"));
-            push_unique(&mut directories, format!("{windows_dir}\\System32\\config"));
-            push_unique(&mut directories, format!("{windows_dir}\\System32\\DriverStore"));
-            push_unique(&mut directories, format!("{windows_dir}\\Installer"));
-            push_unique(&mut directories, format!("{windows_dir}\\servicing"));
-            push_unique(&mut directories, format!("{windows_dir}\\CSC"));
-            push_unique(&mut directories, format!("{windows_dir}\\assembly"));
-            push_unique(&mut directories, format!("{windows_dir}\\Prefetch"));
-            push_unique(&mut directories, format!("{windows_dir}\\Temp"));
-            push_unique(&mut directories, format!("{program_data}\\Microsoft\\Windows\\SystemData"));
-            // Pseudo-dossiers présents à la racine de chaque volume.
-            push_unique(&mut directories, format!("{system_drive}\\System Volume Information"));
-            push_unique(&mut directories, format!("{system_drive}\\$Recycle.Bin"));
-            push_unique(&mut directories, format!("{system_drive}\\Recovery"));
-
-            let mut files = Vec::new();
-            for name in [
-                "pagefile.sys",
-                "hiberfil.sys",
-                "swapfile.sys",
-                "dumpstack.log.tmp",
-                "ntuser.dat",
-                "ntuser.dat.log1",
-                "ntuser.dat.log2",
-            ] {
-                push_unique(&mut files, name.to_string());
-            }
-
-            return Self {
-                directory_prefixes: directories,
-                file_names: files,
-            };
+            Self::windows_default()
         }
 
         #[cfg(not(windows))]
         {
-            let mut directories = Vec::new();
-            for prefix in ["/proc", "/sys", "/dev", "/run"] {
-                push_unique(&mut directories, prefix.to_string());
-            }
-            Self {
-                directory_prefixes: directories,
-                file_names: Vec::new(),
-            }
+            Self::posix_default()
         }
     }
 
-    /// Ajoute un préfixe de dossier protégé (utilisé par les tests et par la
-    /// configuration future « exclusions utilisateur »).
-    #[cfg(test)]
-    pub fn with_directory(mut self, path: &Path) -> Self {
-        push_unique(&mut self.directory_prefixes, compare_key(path));
-        self
+    #[cfg(windows)]
+    fn windows_default() -> Self {
+        let system_drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_string());
+        let windows_dir =
+            std::env::var("WINDIR").unwrap_or_else(|_| format!("{system_drive}\\Windows"));
+        let program_data =
+            std::env::var("ProgramData").unwrap_or_else(|_| format!("{system_drive}\\ProgramData"));
+
+        let mut directories = Vec::new();
+        // Dossiers système à ne jamais parcourir.
+        push_unique(&mut directories, format!("{windows_dir}\\WinSxS"));
+        push_unique(&mut directories, format!("{windows_dir}\\System32\\config"));
+        push_unique(&mut directories, format!("{windows_dir}\\System32\\DriverStore"));
+        push_unique(&mut directories, format!("{windows_dir}\\Installer"));
+        push_unique(&mut directories, format!("{windows_dir}\\servicing"));
+        push_unique(&mut directories, format!("{windows_dir}\\CSC"));
+        push_unique(&mut directories, format!("{windows_dir}\\assembly"));
+        push_unique(&mut directories, format!("{windows_dir}\\Prefetch"));
+        push_unique(&mut directories, format!("{windows_dir}\\Temp"));
+        push_unique(
+            &mut directories,
+            format!("{program_data}\\Microsoft\\Windows\\SystemData"),
+        );
+        // Pseudo-dossiers présents à la racine de chaque volume.
+        push_unique(
+            &mut directories,
+            format!("{system_drive}\\System Volume Information"),
+        );
+        push_unique(&mut directories, format!("{system_drive}\\$Recycle.Bin"));
+        push_unique(&mut directories, format!("{system_drive}\\Recovery"));
+
+        let mut files = Vec::new();
+        for name in [
+            "pagefile.sys",
+            "hiberfil.sys",
+            "swapfile.sys",
+            "dumpstack.log.tmp",
+            "ntuser.dat",
+            "ntuser.dat.log1",
+            "ntuser.dat.log2",
+        ] {
+            push_unique(&mut files, name.to_string());
+        }
+
+        Self {
+            directory_prefixes: directories,
+            file_names: files,
+        }
+    }
+
+    #[cfg(not(windows))]
+    fn posix_default() -> Self {
+        let mut directories = Vec::new();
+        for prefix in ["/proc", "/sys", "/dev", "/run"] {
+            push_unique(&mut directories, prefix.to_string());
+        }
+        Self {
+            directory_prefixes: directories,
+            file_names: Vec::new(),
+        }
     }
 
     pub fn is_protected(&self, path: &Path) -> bool {
