@@ -455,10 +455,16 @@ mod tests {
         .expect("analyse");
 
         assert!(report.skipped_protected >= 1);
-        // Les fichiers de Documents/2024 et 2025 n'ont pas été lus : le
-        // rapport ne peut donc pas les compter.
-        assert_eq!(report.files, 2);
-        assert_eq!(report.total_size_bytes, 5 + 1);
+        // `Documents` n'est pas parcouru ; `Images`, `notes.txt` et
+        // `pagefile.sys` le sont : trois fichiers visibles, 512 + 5 + 1 octets.
+        assert_eq!(report.files, 3);
+        assert_eq!(report.total_size_bytes, 5 + 1 + 512);
+        // Preuve que le contenu du dossier protégé est absent du rapport.
+        assert!(report.total_size_bytes < 4_096);
+        assert!(!report
+            .largest_files
+            .iter()
+            .any(|file| file.name == "rapport.pdf"));
     }
 
     #[test]
