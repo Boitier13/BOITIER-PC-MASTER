@@ -96,6 +96,10 @@ function mapListing(payload: DirectoryListingPayload): DirectoryListing {
     truncated: payload.truncated,
     denied: payload.denied,
     isProtected: payload.isProtected,
+    matched: payload.matched,
+    offset: payload.offset,
+    returned: payload.returned,
+    hasMore: payload.hasMore,
   }
 }
 

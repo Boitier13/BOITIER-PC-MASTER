@@ -11,15 +11,11 @@ import {
   ShieldAlert,
   Video,
 } from 'lucide-react'
+import { useRef } from 'react'
 import type { FileEntry, FileSortKey, SortDirection } from '@/domain/types'
+import { EXPLORER_COLUMN_COUNT, EXPLORER_COLUMNS } from '@/features/explorer/columns'
+import { useRowWindow } from '@/features/explorer/use-row-window'
 import { formatBytes, formatDate } from '@/lib/format'
-
-const COLUMNS: { key: FileSortKey; label: string }[] = [
-  { key: 'name', label: 'Nom' },
-  { key: 'type', label: 'Type' },
-  { key: 'size', label: 'Taille' },
-  { key: 'modified', label: 'Date de modification' },
-]
 
 function EntryIcon({ entry }: { entry: FileEntry }) {
   const size = 16
@@ -48,6 +44,8 @@ interface FileTableProps {
   onSelect: (entry: FileEntry) => void
   onOpen: (entry: FileEntry) => void
   readOnlyLabel: string
+  /** `true` pendant le chargement des pages suivantes (gros dossiers). */
+  loadingMore?: boolean
 }
 
 /**
@@ -67,13 +65,20 @@ export function FileTable({
   onSelect,
   onOpen,
   readOnlyLabel,
+  loadingMore = false,
 }: FileTableProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const rows = useRowWindow(scrollRef, entries.length)
+  const visible = rows.windowed ? entries.slice(rows.start, rows.end) : entries
+
+  const spacerHeight = (rowCount: number) => rowCount * rows.rowHeight
+
   return (
-    <div className="table-wrap">
-      <table>
+    <div className="table-wrap" ref={scrollRef}>
+      <table aria-rowcount={entries.length}>
         <thead>
           <tr>
-            {COLUMNS.map((column) => {
+            {EXPLORER_COLUMNS.map((column) => {
               const active = sortKey === column.key
               return (
                 <th
@@ -103,19 +108,29 @@ export function FileTable({
         <tbody>
           {loading && (
             <tr className="state-row">
-              <td colSpan={4}>Lecture du dossier en cours…</td>
+              <td colSpan={EXPLORER_COLUMN_COUNT}>Lecture du dossier en cours…</td>
             </tr>
           )}
 
           {!loading && entries.length === 0 && (
             <tr className="state-row">
-              <td colSpan={4}>Aucun élément à afficher dans ce dossier.</td>
+              <td colSpan={EXPLORER_COLUMN_COUNT}>Aucun élément à afficher dans ce dossier.</td>
+            </tr>
+          )}
+
+          {!loading && rows.windowed && rows.start > 0 && (
+            <tr aria-hidden="true" className="row-spacer">
+              <td
+                colSpan={EXPLORER_COLUMN_COUNT}
+                style={{ height: spacerHeight(rows.start), padding: 0, border: 0 }}
+              />
             </tr>
           )}
 
           {!loading &&
-            entries.map((entry) => (
+            visible.map((entry) => (
               <tr
+                data-entry-row="true"
                 className={selectedPath === entry.path ? 'selected-row' : ''}
                 key={entry.path}
                 onClick={() => onSelect(entry)}
@@ -148,6 +163,21 @@ export function FileTable({
                 <td>{formatDate(entry.modifiedAtMs)}</td>
               </tr>
             ))}
+
+          {!loading && rows.windowed && rows.end < entries.length && (
+            <tr aria-hidden="true" className="row-spacer">
+              <td
+                colSpan={EXPLORER_COLUMN_COUNT}
+                style={{ height: spacerHeight(entries.length - rows.end), padding: 0, border: 0 }}
+              />
+            </tr>
+          )}
+
+          {!loading && loadingMore && (
+            <tr className="state-row">
+              <td colSpan={EXPLORER_COLUMN_COUNT}>Chargement de la suite du dossier…</td>
+            </tr>
+          )}
         </tbody>
       </table>
       <span className="visually-hidden">{readOnlyLabel}</span>

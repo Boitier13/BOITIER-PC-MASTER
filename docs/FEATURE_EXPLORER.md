@@ -126,3 +126,17 @@ protégés, accès refusés, annulation. Aucun accès disque.
 2. Analyse de l'espace par catégorie à partir des inventaires enregistrés.
 3. Inventaire des applications installées (registre + MSI), toujours sans
    suppression.
+
+## 8. Pagination de l'explorateur (EX1.1)
+
+`directory_list` renvoie une **page** : `offset` et `limit` s'appliquent après le
+tri du moteur (dossiers d'abord, puis nom), et la réponse expose `matched`,
+`offset`, `returned` et `hasMore`. Le plafond `maxEntries` reste la borne
+absolue : `limit` y est ramené côté Rust, et `offset` au-delà de la fin renvoie
+une page vide avec `hasMore: false`.
+
+L'interface charge les pages de 1 000 entrées à la suite, plafonnées à 20 pages,
+et ne monte dans le DOM que la fenêtre visible au-delà de 200 lignes. En
+démonstration comme en réel, la même sémantique est servie ; si un service ne
+renseigne pas `hasMore`, une seule requête est faite et le comportement antérieur
+est conservé.

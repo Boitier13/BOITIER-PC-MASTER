@@ -356,11 +356,15 @@ export function ExplorerPage() {
             onSelect={explorer.select}
             onOpen={explorer.open}
             readOnlyLabel="Exploration en lecture seule : aucun fichier n’est modifié."
+            loadingMore={explorer.loadingMore}
           />
 
           <div className="table-footer">
             <span>
               {explorer.entries.length} éléments · {demo ? 'Données fictives' : 'Lecture seule'}
+              {explorer.truncated
+                ? ` · plafond de ${formatCount(explorer.matchedCount)} éléments atteint`
+                : ''}
             </span>
             <span>{footerRight}</span>
           </div>

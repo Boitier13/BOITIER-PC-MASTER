@@ -382,3 +382,23 @@ hauteur estimée du panneau ≤ 900 px, sept colonnes dimensionnées, troncature
 cellules, défilement horizontal prévu, barre de filtres qui passe à la ligne,
 somme `panneau + tableau + marges ≤ 1 440 px`, échelle principale préservée et
 aucune largeur minimale supérieure à 1 010 px.
+
+## 15. EX1.1 — explorateur paginé et liste fenêtrée (2026-11-19)
+
+L'explorateur ne charge plus un dossier « d'un bloc » : `directory_list` accepte
+désormais `offset` et `limit`, le moteur **trie avant de découper** (deux pages
+successives ne peuvent ni se recouvrir ni sauter une entrée) et renvoie
+`matched`, `offset`, `returned` et `hasMore`. Le plafond de sécurité
+`maxEntries` reste la borne absolue : `limit` y est ramené dans le moteur.
+
+Côté interface, `use-paged-listing.ts` enchaîne des pages de 1 000 entrées, avec
+un garde-fou de 20 pages, et `use-row-window.ts` ne monte que les lignes proches
+de la zone visible (seuil 200 lignes, 12 lignes de marge). **Si la hauteur du
+conteneur n'est pas mesurable** (rendu sans moteur de mise en page, tests), le
+fenêtrage se désactive et toutes les lignes sont rendues : le comportement
+observé reste celui d'avant.
+
+Ajouts : 3 tests Rust de pagination, 5 tests Vitest (dont un test d'écran sur
+1 500 entrées), 12 contrôles « Explorateur EX1 », et
+`docs/ADR_EX1_2026-11-19.md` (décisions R1–R8, contrat de pagination, schéma
+SQLite v2 figé pour EX1.2).

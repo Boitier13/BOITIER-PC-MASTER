@@ -316,10 +316,13 @@ const explorerSources = [
   read('src/features/explorer/FileTable.tsx'),
   read('src/features/explorer/PropertiesPanel.tsx'),
   read('src/features/explorer/use-explorer.ts'),
+  read('src/features/explorer/use-paged-listing.ts'),
+  read('src/features/explorer/use-row-window.ts'),
+  read('src/features/explorer/columns.ts'),
 ].join('\n')
 
 check('Explorateur', 'L’écran passe par le contrat SystemService',
-  explorerSources.includes('useExplorer') && read('src/features/explorer/use-explorer.ts').includes('listDirectory'))
+  explorerSources.includes('useExplorer') && explorerSources.includes('listDirectory'))
 check('Explorateur', 'Recherche récursive branchée sur walk()',
   read('src/features/explorer/use-explorer.ts').includes('.walk('))
 check('Explorateur', 'Annulation de recherche (AbortController)',
@@ -538,6 +541,60 @@ check('Typographie', 'Barre latérale : Arial conservée, échelle ×1,5 appliqu
 check('Typographie', 'Paquet @fontsource absent des dépendances',
   !JSON.stringify(packageJson?.dependencies ?? {}).includes('@fontsource') &&
   !JSON.stringify(packageJson?.devDependencies ?? {}).includes('@fontsource'))
+
+/* ------------------------------------------------------- Explorateur EX1 */
+
+const listingRs = read('src-tauri/src/fs_engine/listing.rs')
+const explorerHook = read('src/features/explorer/use-explorer.ts')
+const pagedHook = read('src/features/explorer/use-paged-listing.ts')
+const fileTable = read('src/features/explorer/FileTable.tsx')
+const mockService = read('src/services/mock/mock-system-service.ts')
+const tauriService = read('src/services/tauri/tauri-system-service.ts')
+const domainTypes = read('src/domain/types.ts')
+
+check('Explorateur EX1', 'ADR de cadrage présent (refactorisations et schéma v2)',
+  existsSync(join(root, 'docs/ADR_EX1_2026-11-19.md')) &&
+  ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'entries_fts'].every((token) =>
+    read('docs/ADR_EX1_2026-11-19.md').includes(token)))
+check('Explorateur EX1', 'Moteur : pagination déclarée (offset, limit, has_more)',
+  listingRs.includes('pub offset: usize') &&
+  listingRs.includes('pub limit: Option<usize>') &&
+  listingRs.includes('pub has_more: bool') &&
+  listingRs.includes('pub matched: usize'))
+check('Explorateur EX1', 'Moteur : la page reste bornée par max_entries',
+  listingRs.includes('limit.min(options.max_entries)') &&
+  listingRs.includes('entries.drain(offset..end)'))
+check('Explorateur EX1', 'Moteur : tests de pagination présents',
+  ['pagination_deterministe_sans_recouvrement', 'offset_au_dela_de_la_fin_renvoie_une_page_vide', 'sans_pagination_le_listage_est_inchange']
+    .every((test) => listingRs.includes(test)))
+check('Explorateur EX1', 'Contrats : pagination miroitée côté TypeScript',
+  domainTypes.includes('offset?: number') && domainTypes.includes('limit?: number') &&
+  domainTypes.includes('hasMore?: boolean') &&
+  contracts.includes('hasMore: boolean') && contracts.includes('returned: number'))
+check('Explorateur EX1', 'Chargement paginé borné (page ≤ 1 000, ≤ 20 pages)',
+  /export const PAGE_SIZE = 1_000/u.test(pagedHook) &&
+  /export const MAX_PAGES = 20/u.test(pagedHook) &&
+  pagedHook.includes('Math.min(options.pageSize ?? PAGE_SIZE, PAGE_SIZE)'))
+check('Explorateur EX1', 'Aucun appel de listage direct hors du chargeur paginé',
+  !explorerHook.includes('service.listDirectory') && pagedHook.includes('service.listDirectory'))
+check('Explorateur EX1', 'Liste fenêtrée avec repli complet quand la hauteur est inconnue',
+  fileTable.includes('useRowWindow') && fileTable.includes('data-entry-row') &&
+  fileTable.includes('aria-hidden="true"') &&
+  read('src/features/explorer/use-row-window.ts').includes('!rowHeight || !viewport'))
+check('Explorateur EX1', 'Colonnes extraites du rendu (préparation EX1.7)',
+  existsSync(join(root, 'src/features/explorer/columns.ts')) &&
+  read('src/features/explorer/columns.ts').includes('EXPLORER_COLUMNS') &&
+  fileTable.includes('EXPLORER_COLUMNS'))
+check('Explorateur EX1', 'Démonstration et moteur réel servent la même pagination',
+  mockService.includes('hasMore: end < matched') && tauriService.includes('hasMore: payload.hasMore'))
+check('Explorateur EX1', 'Aucune exécution de processus dans tout le Rust',
+  !/std::process|Command::new|ShellExecute/.test(
+    [...engineFiles, 'src-tauri/src/lib.rs', 'src-tauri/src/commands/fs.rs', 'src-tauri/src/commands/analysis.rs']
+      .filter((file) => file.endsWith('.rs'))
+      .map((file) => read(file))
+      .join('\n')))
+check('Explorateur EX1', 'Aucune requête SQL destructive dans les migrations',
+  !/DROP TABLE|DELETE FROM|TRUNCATE/u.test(read('src-tauri/src/db/migrations/001_init.sql')))
 
 /* ------------------------------------------------------------ Mise en page */
 

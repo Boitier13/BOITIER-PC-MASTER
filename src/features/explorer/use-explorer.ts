@@ -10,8 +10,8 @@ import type {
   SortDirection,
   WalkResult,
 } from '@/domain/types'
-import { useServiceData } from '@/hooks/use-service-data'
 import { useVolumes } from '@/hooks/use-volumes'
+import { usePagedListing } from '@/features/explorer/use-paged-listing'
 import { ServiceError } from '@/services/system-service'
 import { useSystemService } from '@/store/system-service-context'
 
@@ -31,6 +31,12 @@ export interface ExplorerController {
   path: string
   listing: DirectoryListing | null
   loading: boolean
+  /** `true` pendant le chargement des pages suivantes d'un gros dossier. */
+  loadingMore: boolean
+  /** Entrées retenues par le moteur pour ce dossier (avant pagination). */
+  matchedCount: number
+  /** `true` si le moteur a atteint son plafond pour ce dossier. */
+  truncated: boolean
   error: ServiceError | null
   navigate: (path: string) => void
   goBack: () => void
@@ -147,13 +153,12 @@ export function useExplorer(options: Options): ExplorerController {
     }
   }, [currentPath, fallbackPath])
 
-  const listing = useServiceData<DirectoryListing | null>(
-    () =>
-      currentPath
-        ? service.listDirectory(currentPath, { ...LIST_OPTIONS, includeHidden })
-        : Promise.resolve(null),
-    [currentPath, includeHidden, service],
-  )
+  // Listage paginé : le moteur trie puis découpe, l'écran n'accumule que les
+  // pages réellement renvoyées (aucune lecture disque hors contrat).
+  const listing = usePagedListing(service, currentPath, {
+    includeHidden,
+    maxEntries: LIST_OPTIONS.maxEntries ?? 5_000,
+  })
 
   const navigate = useCallback((nextPath: string) => {
     if (!nextPath) return
@@ -197,7 +202,7 @@ export function useExplorer(options: Options): ExplorerController {
     })
   }, [])
 
-  const baseEntries = scan?.result?.entries ?? listing.data?.entries ?? EMPTY_ENTRIES
+  const baseEntries = scan?.result?.entries ?? listing.listing?.entries ?? EMPTY_ENTRIES
 
   const entries = useMemo(() => {
     const filtered = filter === 'all'
@@ -311,8 +316,11 @@ export function useExplorer(options: Options): ExplorerController {
 
   return {
     path: currentPath,
-    listing: listing.data,
+    listing: listing.listing,
     loading: listing.loading,
+    loadingMore: listing.loadingMore,
+    matchedCount: listing.listing?.matched ?? baseEntries.length,
+    truncated: listing.listing?.truncated ?? false,
     error: listing.error instanceof ServiceError ? listing.error : null,
     navigate,
     goBack,

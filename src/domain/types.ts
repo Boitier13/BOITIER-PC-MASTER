@@ -98,7 +98,12 @@ export interface ListOptions {
   includeHidden?: boolean
   includeSystem?: boolean
   directoriesFirst?: boolean
+  /** Plafond du moteur ; borne également `limit`. */
   maxEntries?: number
+  /** Décalage de pagination, appliqué après le tri du moteur. */
+  offset?: number
+  /** Taille de page demandée (défaut : tout ce qui est retenu). */
+  limit?: number
 }
 
 export interface DirectoryListing {
@@ -110,6 +115,14 @@ export interface DirectoryListing {
   truncated: boolean
   denied: number
   isProtected: boolean
+  /** Entrées retenues après filtres et plafond, avant pagination. */
+  matched?: number
+  /** Décalage effectif de la page renvoyée. */
+  offset?: number
+  /** Nombre d'entrées renvoyées dans cette page. */
+  returned?: number
+  /** `true` s'il reste des entrées après cette page. */
+  hasMore?: boolean
 }
 
 /** Options d'un parcours récursif (recherche, inventaire). */

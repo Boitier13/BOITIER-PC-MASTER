@@ -49,7 +49,7 @@ const NOT_IMPLEMENTED_CAPABILITIES: SystemCapabilities['capabilities'] = {
   reports: false,
 }
 
-const DEFAULT_LIST_OPTIONS: Required<ListOptions> = {
+const DEFAULT_LIST_OPTIONS = {
   includeHidden: false,
   includeSystem: true,
   directoriesFirst: true,
@@ -148,7 +148,17 @@ export class MockSystemService implements SystemService {
   }
 
   async listDirectory(path: string, options: ListOptions = {}): Promise<DirectoryListing> {
-    const settings = { ...DEFAULT_LIST_OPTIONS, ...options }
+    // Normalisation explicite : `limit` absent signifie « tout ce qui est
+    // retenu », et non « page vide ». Les défauts ne doivent jamais être
+    // écrasés par une propriété explicitement indéfinie.
+    const settings = {
+      includeHidden: options.includeHidden ?? DEFAULT_LIST_OPTIONS.includeHidden,
+      includeSystem: options.includeSystem ?? DEFAULT_LIST_OPTIONS.includeSystem,
+      directoriesFirst: options.directoriesFirst ?? DEFAULT_LIST_OPTIONS.directoriesFirst,
+      maxEntries: options.maxEntries ?? DEFAULT_LIST_OPTIONS.maxEntries,
+      offset: Math.max(0, options.offset ?? 0),
+      limit: options.limit,
+    }
     const key = normalizePathKey(path)
 
     if (!key) {
@@ -180,19 +190,29 @@ export class MockSystemService implements SystemService {
       entries = entries.filter((entry) => !entry.attributes.system)
     }
 
-    const truncated = entries.length > settings.maxEntries
-    if (truncated) {
-      entries = entries.slice(0, settings.maxEntries)
-    }
+    // Même sémantique que le moteur Rust : tri puis découpe déterministe, page
+    // bornée par `maxEntries` pour qu'aucune requête ne renvoie tout le dossier.
+    const sorted = sortEntries(entries, settings.directoriesFirst)
+    const truncated = sorted.length > settings.maxEntries
+    const retained = truncated ? sorted.slice(0, settings.maxEntries) : sorted
+    const matched = retained.length
+    const offset = Math.min(settings.offset, matched)
+    const pageSize = Math.min(settings.limit ?? matched, settings.maxEntries)
+    const end = Math.min(offset + pageSize, matched)
+    const page = retained.slice(offset, end)
 
     return {
       path,
       parent: parentPathOf(path),
-      entries: sortEntries(entries, settings.directoriesFirst),
+      entries: page,
       total: raw.length,
       truncated,
       denied: raw.filter((spec) => spec.denied === true).length,
       isProtected: PROTECTED_PATHS.has(key),
+      matched,
+      offset,
+      returned: page.length,
+      hasMore: end < matched,
     }
   }
 

@@ -86,6 +86,14 @@ export interface DirectoryListingPayload {
   truncated: boolean
   denied: number
   isProtected: boolean
+  /** Entrées retenues après filtres et plafond, avant pagination. */
+  matched: number
+  /** Décalage effectif de la page renvoyée. */
+  offset: number
+  /** Nombre d'entrées renvoyées dans cette page. */
+  returned: number
+  /** `true` s'il reste des entrées après cette page. */
+  hasMore: boolean
 }
 
 export interface VolumePayload {

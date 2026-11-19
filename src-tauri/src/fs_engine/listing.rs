@@ -15,8 +15,14 @@ pub struct ListOptions {
     pub include_system: bool,
     pub directories_first: bool,
     /// Plafond de sécurité : au-delà, la liste est tronquée et signalée comme
-    /// telle (`truncated: true`).
+    /// telle (`truncated: true`). Il borne aussi `limit`.
     pub max_entries: usize,
+    /// Décalage de pagination, appliqué **après** le tri : la page renvoyée est
+    /// donc déterministe (dossiers d'abord, puis nom).
+    pub offset: usize,
+    /// Taille de page demandée. `None` renvoie tout ce qui est retenu par
+    /// `max_entries` (comportement historique, conservé par défaut).
+    pub limit: Option<usize>,
 }
 
 impl Default for ListOptions {
@@ -26,6 +32,8 @@ impl Default for ListOptions {
             include_system: true,
             directories_first: true,
             max_entries: 5_000,
+            offset: 0,
+            limit: None,
         }
     }
 }
@@ -45,6 +53,14 @@ pub struct DirectoryListingDto {
     /// `true` si le dossier lui-même est protégé (contenu affiché, pas de
     /// parcours récursif autorisé).
     pub is_protected: bool,
+    /// Entrées retenues après filtres et plafond, **avant** pagination.
+    pub matched: usize,
+    /// Décalage effectif de la page (borné à `matched`).
+    pub offset: usize,
+    /// Nombre d'entrées renvoyées dans cette page.
+    pub returned: usize,
+    /// `true` s'il reste des entrées après cette page.
+    pub has_more: bool,
 }
 
 fn parent_of(path: &Path) -> Option<String> {
@@ -142,14 +158,33 @@ pub fn list_directory(
 
     sort_entries(&mut entries, options.directories_first);
 
+    // Pagination déterministe : le tri précède la découpe, deux appels
+    // successifs ne peuvent donc ni se recouvrir ni sauter d'entrée. La page
+    // reste bornée par `max_entries` pour qu'aucune requête ne puisse
+    // rapatrier un dossier entier par IPC.
+    let matched = entries.len();
+    let offset = options.offset.min(matched);
+    let page_size = options
+        .limit
+        .map(|limit| limit.min(options.max_entries))
+        .unwrap_or(matched);
+    let end = offset.saturating_add(page_size).min(matched);
+    let has_more = end < matched;
+    let returned = end - offset;
+    let page: Vec<FileEntryDto> = entries.drain(offset..end).collect();
+
     Ok(DirectoryListingDto {
         parent: parent_of(path),
         path: display,
-        entries,
+        entries: page,
         total,
         truncated,
         denied,
         is_protected: policy.is_protected(path),
+        matched,
+        offset,
+        returned,
+        has_more,
     })
 }
 
@@ -229,6 +264,88 @@ mod tests {
         let error = list_directory(&tree.path().join("absent"), &ListOptions::default(), &policy)
             .expect_err("doit échouer");
         assert_eq!(error.code(), "not_found");
+    }
+
+    #[test]
+    fn pagination_deterministe_sans_recouvrement() {
+        let tree = sample_tree();
+        let policy = ProtectionPolicy::for_tests();
+
+        let first = list_directory(
+            tree.path(),
+            &ListOptions {
+                limit: Some(2),
+                ..ListOptions::default()
+            },
+            &policy,
+        )
+        .expect("première page");
+        assert_eq!(first.returned, 2);
+        assert_eq!(first.matched, 4);
+        assert!(first.has_more);
+        assert_eq!(first.offset, 0);
+
+        let second = list_directory(
+            tree.path(),
+            &ListOptions {
+                offset: first.returned,
+                limit: Some(2),
+                ..ListOptions::default()
+            },
+            &policy,
+        )
+        .expect("seconde page");
+        assert_eq!(second.returned, 2);
+        assert!(!second.has_more);
+
+        let mut names: Vec<String> = first
+            .entries
+            .iter()
+            .chain(second.entries.iter())
+            .map(|entry| entry.name.clone())
+            .collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), 4, "aucune entrée ne doit apparaître deux fois");
+        assert!(
+            first.entries.iter().all(|entry| entry.is_directory),
+            "les dossiers restent en tête de la première page"
+        );
+        assert!(
+            second.entries.iter().all(|entry| !entry.is_directory),
+            "la seconde page ne contient que des fichiers"
+        );
+    }
+
+    #[test]
+    fn offset_au_dela_de_la_fin_renvoie_une_page_vide() {
+        let tree = sample_tree();
+        let policy = ProtectionPolicy::for_tests();
+        let listing = list_directory(
+            tree.path(),
+            &ListOptions {
+                offset: 50,
+                limit: Some(10),
+                ..ListOptions::default()
+            },
+            &policy,
+        )
+        .expect("listage");
+        assert_eq!(listing.returned, 0);
+        assert_eq!(listing.offset, listing.matched);
+        assert!(!listing.has_more);
+    }
+
+    #[test]
+    fn sans_pagination_le_listage_est_inchange() {
+        let tree = sample_tree();
+        let policy = ProtectionPolicy::for_tests();
+        let listing = list_directory(tree.path(), &ListOptions::default(), &policy).expect("listage");
+        assert_eq!(listing.entries.len(), 4);
+        assert_eq!(listing.returned, 4);
+        assert_eq!(listing.matched, 4);
+        assert_eq!(listing.offset, 0);
+        assert!(!listing.has_more);
     }
 
     #[test]
