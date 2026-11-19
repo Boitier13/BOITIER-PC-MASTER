@@ -9,7 +9,7 @@ import { App } from '@/app/App'
  */
 
 export const SCREENS = [
-  { path: '/', title: 'Bonjour, Alexandre', breadcrumb: 'Tableau de bord' },
+  { path: '/', title: 'Bonjour', breadcrumb: 'Tableau de bord' },
   { path: '/explorer', title: 'Explorateur de fichiers', breadcrumb: 'Explorateur de fichiers' },
   { path: '/inventory', title: 'Inventaire des disques', breadcrumb: 'Inventaire des disques' },
   { path: '/disk-analysis', title: 'Analyse de l’espace', breadcrumb: 'Analyse de l’espace' },
@@ -49,7 +49,7 @@ describe('Les neuf écrans de la maquette', () => {
 
   it('ramène au tableau de bord pour une URL inconnue', () => {
     renderAt('/inexistant')
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Bonjour, Alexandre')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Bonjour')
   })
 
   it('conserve la mention de démonstration permanente', () => {

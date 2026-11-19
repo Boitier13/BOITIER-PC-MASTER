@@ -2,45 +2,86 @@ import {
   Activity,
   AppWindow,
   ArrowUp,
-  Check,
   ChevronRight,
   Database,
   FileText,
   HardDrive,
   MoreHorizontal,
+  ScanLine,
   ShieldCheck,
   Sparkles,
-  Unplug,
 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DemoLabel } from '@/components/DemoLabel'
 import { Metric } from '@/components/Metric'
 import { PageHeading } from '@/components/PageHeading'
-import { useWorkspace } from '@/data/use-workspace'
+import { coverageDetail, coverageLabel, useMeasurements } from '@/hooks/use-analysis'
 import { useEngineMode } from '@/hooks/use-engine-mode'
 import { useServiceData } from '@/hooks/use-service-data'
 import { useVolumes } from '@/hooks/use-volumes'
-import { formatBytes, usagePercent } from '@/lib/format'
+import { CATEGORY_COLORS, CATEGORY_LABELS, donutGradient } from '@/lib/categories'
+import { formatBytes, formatCount, formatDateTime, usagePercent } from '@/lib/format'
 import { ROUTES } from '@/app/routes'
-import type { AppInventory } from '@/domain/types'
+import type { AnalysisReport, AppInventory, UserFolder } from '@/domain/types'
 import { useAppState } from '@/store/app-state'
 import { useSystemService } from '@/store/system-service-context'
+
+/** Dernier segment du profil réel : `C:\Users\alice` → `alice`. */
+function profileName(folders: UserFolder[]): string | null {
+  const home = folders.find((folder) => folder.id === 'home')
+  if (!home) return null
+  const segments = home.path.split(/[\\/]/).filter(Boolean)
+  return segments.length ? segments[segments.length - 1] : null
+}
+
+interface Slice {
+  label: string
+  bytes: number
+  files: number
+  color: string
+}
+
+/** Agrège les catégories mesurées ; rien n'est ajouté si la mesure est vide. */
+function toSlices(report: AnalysisReport | null): Slice[] {
+  if (!report) return []
+
+  const slices = report.byCategory
+    .filter((category) => category.bytes > 0)
+    .map((category) => ({
+      label: CATEGORY_LABELS[category.category] ?? category.category,
+      bytes: category.bytes,
+      files: category.files,
+      color: CATEGORY_COLORS[category.category] ?? '#3b4557',
+    }))
+    .sort((left, right) => right.bytes - left.bytes)
+
+  if (slices.length <= 5) return slices
+
+  const head = slices.slice(0, 4)
+  const tail = slices.slice(4)
+  head.push({
+    label: 'Autres mesurés',
+    bytes: tail.reduce((sum, slice) => sum + slice.bytes, 0),
+    files: tail.reduce((sum, slice) => sum + slice.files, 0),
+    color: '#3b4557',
+  })
+  return head
+}
 
 /**
  * Tableau de bord.
  *
- * Les indicateurs chiffrés restent ceux de la maquette (audit B11) : ils ne
- * proviennent d'aucun calcul système. Ils seront remplacés par les agrégats du
- * moteur réel (SQLite) en phase 2.
+ * Chaque valeur affichée provient d'une lecture réelle. Lorsqu'une mesure manque,
+ * l'écran le dit — il n'existe plus aucune valeur d'exemple, ni de fraîcheur
+ * supposée.
  */
 export function DashboardPage() {
   const navigate = useNavigate()
-  const { openAction } = useAppState()
-  const { history } = useWorkspace()
-  const { volumes, loading: volumesLoading } = useVolumes()
-  const demo = useEngineMode() === 'demo'
   const service = useSystemService()
+  const demo = useEngineMode() === 'demo'
+  const { volumes, folders, loading: volumesLoading, error: volumesError } = useVolumes()
+  const { lastReport, journal } = useMeasurements()
 
   // Compteur réel : une seule entrée demandée, le total suffit.
   const {
@@ -52,15 +93,34 @@ export function DashboardPage() {
   const storage = useMemo(() => {
     const total = volumes.reduce((sum, volume) => sum + volume.totalBytes, 0)
     const free = volumes.reduce((sum, volume) => sum + volume.freeBytes, 0)
-    return { total, free, kinds: volumes.map((volume) => volume.kind).join(', ') }
+    return {
+      total,
+      free,
+      used: Math.max(total - free, 0),
+      kinds: volumes.map((volume) => volume.kind).join(', '),
+    }
   }, [volumes])
+
+  const userName = useMemo(() => profileName(folders), [folders])
+  const slices = useMemo(() => toSlices(lastReport), [lastReport])
+  const measured = lastReport?.totalSizeBytes ?? 0
+  const donut = useMemo(() => donutGradient(slices, measured), [slices, measured])
+  const appsTotal = appsError ? null : appInventory?.total ?? null
+
+  const appDetail = appsError
+    ? 'Moteur indisponible'
+    : appsLoading
+      ? 'Lecture du registre…'
+      : demo
+        ? 'Inventaire de démonstration'
+        : 'Registre Windows · lecture seule'
 
   return (
     <>
       <PageHeading
         eyebrow="VOTRE ESPACE DE TRAVAIL"
-        title="Bonjour, Alexandre"
-        description="Voici un aperçu de l’état de votre environnement informatique."
+        title={userName ? `Bonjour, ${userName}` : 'Bonjour'}
+        description="Voici l’état mesuré de votre environnement informatique."
         action={<DemoLabel />}
       />
 
@@ -70,7 +130,7 @@ export function DashboardPage() {
         </div>
         <div>
           <strong>Votre PC est prêt à être exploré</strong>
-          <p>Consultez vos disques et applications, avec la même interface en démonstration et en lecture réelle.</p>
+          <p>Disques et applications sont lus en direct ; l’espace disque se mesure sur demande.</p>
         </div>
         <button className="button primary" onClick={() => navigate(ROUTES.inventory)}>
           <HardDrive size={15} /> Explorer les disques <ChevronRight size={15} />
@@ -81,38 +141,47 @@ export function DashboardPage() {
         <Metric
           icon={HardDrive}
           label="Disques détectés"
-          value={volumesLoading ? '—' : String(volumes.length)}
-          detail={storage.kinds || 'Aucun volume détecté'}
+          value={volumesLoading || volumesError ? '—' : String(volumes.length)}
+          detail={volumesError ? 'Volumes illisibles' : storage.kinds || 'Aucun volume détecté'}
           color="blue"
         />
         <Metric
           icon={Database}
-          label="Espace disponible"
-          value={volumesLoading ? '—' : formatBytes(storage.free)}
-          detail={volumesLoading ? 'Lecture des volumes…' : `Sur ${formatBytes(storage.total)} au total`}
+          label="Espace utilisé"
+          value={volumesLoading || volumesError ? '—' : formatBytes(storage.used)}
+          detail={
+            volumesLoading || volumesError
+              ? 'Lecture des volumes…'
+              : `${usagePercent(storage.used, storage.total)}% de ${formatBytes(storage.total)}`
+          }
           color="cyan"
         />
         <Metric
+          icon={ScanLine}
+          label="Espace disponible"
+          value={volumesLoading || volumesError ? '—' : formatBytes(storage.free)}
+          detail={volumesLoading || volumesError ? 'Lecture des volumes…' : 'Tous volumes confondus'}
+          color="green"
+        />
+        <Metric
           icon={FileText}
-          label="Fichiers inventoriés"
-          value="124 806"
-          detail="Dernier inventaire · aujourd’hui"
+          label="Fichiers mesurés"
+          value={lastReport ? formatCount(lastReport.files) : '—'}
+          detail={
+            lastReport
+              ? `Mesure du ${formatDateTime(lastReport.scannedAtMs)}`
+              : demo
+                ? 'Mesure indisponible en démonstration'
+                : 'Aucune mesure dans cette session'
+          }
           color="violet"
         />
         <Metric
           icon={AppWindow}
           label="Applications installées"
-          value={appsLoading || appsError ? '—' : String(appInventory?.total ?? 0)}
-          detail={
-            appsError
-              ? 'Moteur indisponible'
-              : appsLoading
-                ? 'Lecture du registre…'
-                : demo
-                  ? 'Inventaire de démonstration'
-                  : 'Registre Windows · lecture seule'
-          }
-          color="green"
+          value={appsLoading || appsError ? '—' : String(appsTotal ?? 0)}
+          detail={appDetail}
+          color="violet"
         />
       </div>
 
@@ -121,7 +190,7 @@ export function DashboardPage() {
           <div className="panel-heading">
             <div>
               <h2>Utilisation des disques</h2>
-              <p>Occupation des volumes inventoriés</p>
+              <p>Occupation des volumes lus sur ce PC</p>
             </div>
             <button className="text-link" onClick={() => navigate(ROUTES.inventory)}>
               Voir les disques <ChevronRight size={14} />
@@ -155,6 +224,13 @@ export function DashboardPage() {
                 <strong className="disk-percent">{usagePercent(volume.usedBytes, volume.totalBytes)}%</strong>
               </div>
             ))}
+            {!volumes.length && !volumesLoading && (
+              <p className="state-note">
+                {volumesError
+                  ? 'Le moteur n’a pas pu lire les volumes de ce PC.'
+                  : 'Aucun volume monté n’a été détecté.'}
+              </p>
+            )}
           </div>
           <div className="panel-foot">
             <span>
@@ -168,34 +244,50 @@ export function DashboardPage() {
           <div className="panel-heading">
             <div>
               <h2>Répartition des fichiers</h2>
-              <p>Par catégorie · tous les disques</p>
+              <p>
+                {lastReport
+                  ? `${lastReport.root} · ${formatDateTime(lastReport.scannedAtMs)}`
+                  : 'Aucune mesure dans cette session'}
+              </p>
             </div>
-            <button className="icon-button" aria-label="Plus d’options">
+            <button
+              className="icon-button"
+              aria-label="Analyser l’espace"
+              onClick={() => navigate(ROUTES.diskAnalysis)}
+            >
               <MoreHorizontal size={19} />
             </button>
           </div>
-          <div className="category-content">
-            <div className="donut" aria-label="Répartition fictive des catégories">
-              <div>
-                <strong>2,1 To</strong>
-                <span>espace utilisé</span>
+          {slices.length ? (
+            <div className="category-content">
+              <div className="donut" style={{ background: donut }} aria-label="Répartition mesurée des catégories">
+                <div>
+                  <strong>{formatBytes(measured)}</strong>
+                  <span>mesurés</span>
+                </div>
+              </div>
+              <div className="category-legend">
+                {slices.map((slice) => (
+                  <div key={slice.label}>
+                    <i style={{ background: slice.color }} />
+                    <span>{slice.label}</span>
+                    <b>{formatBytes(slice.bytes)}</b>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="category-legend">
-              {[
-                { name: 'Applications', size: '684 Go', color: '#4388ff' },
-                { name: 'Vidéos', size: '512 Go', color: '#20c5d7' },
-                { name: 'Documents', size: '326 Go', color: '#8b78ef' },
-                { name: 'Autres', size: '578 Go', color: '#3b4557' },
-              ].map((category) => (
-                <div key={category.name}>
-                  <i style={{ background: category.color }} />
-                  <span>{category.name}</span>
-                  <b>{category.size}</b>
-                </div>
-              ))}
+          ) : (
+            <div className="empty-state">
+              <FileText size={22} />
+              <strong>Aucun espace mesuré</strong>
+              <p>
+                Les catégories ne s’affichent qu’après une mesure réelle. Rien n’est estimé à votre place.
+              </p>
+              <button className="button secondary" onClick={() => navigate(ROUTES.diskAnalysis)}>
+                <ScanLine size={14} /> Mesurer maintenant
+              </button>
             </div>
-          </div>
+          )}
           <button className="panel-link" onClick={() => navigate(ROUTES.diskAnalysis)}>
             Explorer l’espace disque <ArrowUp size={14} />
           </button>
@@ -207,27 +299,32 @@ export function DashboardPage() {
           <div className="panel-heading">
             <div>
               <h2>Activité récente</h2>
-              <p>Dernières opérations de démonstration</p>
+              <p>Opérations réellement exécutées pendant cette session</p>
             </div>
             <button className="text-link" onClick={() => navigate(ROUTES.history)}>
               Tout voir <ChevronRight size={14} />
             </button>
           </div>
           <div className="activity-list">
-            {history.slice(0, 3).map((entry, index) => (
+            {journal.slice(0, 3).map((entry) => (
               <div className="activity-row" key={entry.id}>
-                <div className={`activity-icon ${index === 0 ? 'blue' : ''}`}>
-                  {index === 0 ? <Check size={15} /> : index === 1 ? <Activity size={15} /> : <Unplug size={15} />}
+                <div className="activity-icon blue">
+                  <Activity size={15} />
                 </div>
                 <div className="activity-copy">
                   <strong>{entry.name}</strong>
                   <span>{entry.detail}</span>
                 </div>
-                {/* Horodatage déduit de l'index, comme dans la maquette (audit B12). */}
-                <span className="activity-time">{index === 0 ? 'Il y a 2 h' : index === 1 ? 'Hier' : 'Il y a 3 jours'}</span>
+                <span className="activity-time">{formatDateTime(entry.atMs)}</span>
                 <span className="status-pill">{entry.result}</span>
               </div>
             ))}
+            {!journal.length && (
+              <p className="state-note">
+                Aucune opération effectuée dans cette session. Lancez une mesure d’espace pour alimenter
+                cet historique.
+              </p>
+            )}
           </div>
         </section>
 
@@ -264,15 +361,20 @@ export function DashboardPage() {
         </div>
         <div>
           <strong>
-            État général du système{' '}
+            Données lues sur ce PC{' '}
             <span className="healthy">
-              <i /> Démonstration uniquement
+              <i /> {demo ? 'Démonstration' : 'Lecture seule'}
             </span>
           </strong>
-          <p>Les indicateurs ci-dessus sont fictifs. Aucune analyse ou modification réelle de Windows n’a été réalisée.</p>
+          <p>
+            {demo
+              ? 'Le moteur de démonstration est actif : aucune donnée de votre PC n’est utilisée.'
+              : 'Aucune modification n’a été effectuée. Mesures disponibles : volumes, applications, espace sur demande.'}
+            {' '}Non disponible : désinstallation assistée (lot C2), surveillance (lot C4), instantanés (lot D).
+          </p>
         </div>
-        <button onClick={() => openAction('État du système')}>
-          Détails <ChevronRight size={14} />
+        <button onClick={() => navigate(ROUTES.settings)}>
+          Diagnostic <ChevronRight size={14} />
         </button>
       </div>
     </>

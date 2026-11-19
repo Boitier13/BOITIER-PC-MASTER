@@ -268,3 +268,33 @@ registre », vérifiée par `scripts/check-foundation.mjs` (`set_value`,
 3. **Autres comptes utilisateurs non lus** (pas de montage de ruche).
 4. **Aucune désinstallation exécutée** : la commande déclarée est affichée,
    jamais lancée.
+
+## 12. Lot B — fiabilisation des données (2026-11-19)
+
+Le tableau de bord et les écrans d'analyse, d'historique, de désinstallation et
+de surveillance ne contiennent plus aucune valeur d'exemple.
+
+| Élément | Avant | Après |
+|---|---|---|
+| Fichiers affichés | `124 806` en dur | mesure réelle, ou « — » |
+| Répartition par catégorie | `2,1 To` et 4 tailles figées | agrégats de `analysis_scan`, ou état vide |
+| Activité récente | fixtures + horodatages déduits de l'index | journal de session réel |
+| Espace utilisé | absent | somme réelle des volumes |
+| Analyse de l'espace | 7 catégories, 2 classements fictifs | mesure du périmètre choisi, couverture affichée |
+| Historique | 4 lignes fictives, compteurs `12/8/5/24` | journal de session, compteurs calculés |
+| Désinstallation | résidus Adobe présélectionnés | état vide « lot C2 » |
+| Surveillance | faux rapport `24/6/12/2` | écran inerte, mention « lot C4 » |
+| Mode démonstration | exemples chiffrés | mêmes états d'indisponibilité |
+
+**Nouveauté moteur** : `analysis_scan` (lecture seule, bornée, annulable) et
+`fs_engine::walker::traverse`, boucle unique partagée par l'exploration et la
+mesure. Aucune écriture, aucun processus, aucune suppression.
+
+**Contrats** : `scripts/check-foundation.mjs` passe à 165 contrôles, dont 8 pour
+la mesure (commande déclarée et miroitée, aucune écriture, boucle unique, plus
+aucune valeur de la maquette dans les écrans, plus aucune fixture consommée,
+mock qui refuse au lieu d'inventer, journal non persisté, lots nommés).
+
+**Limites** : pas de persistance (lot D), doublons et résidus absents (lots C5 et
+C2), surveillance absente (lot C4). Toute mesure partielle est annoncée comme
+telle, avec le nombre d'entrées refusées et de dossiers protégés non parcourus.

@@ -399,6 +399,74 @@ check('Applications', 'Aucune donnée fictive présentée comme réelle hors dé
   read('src/features/applications/ApplicationsPage.tsx').includes('Inventaire indisponible') &&
   read('src/features/dashboard/DashboardPage.tsx').includes('Moteur indisponible'))
 
+/* ---------------------------------------------------------- Mesure d'espace */
+
+/** Concatène les sources TS de l'application (hors tests). */
+function readTsTree(directory) {
+  const absolute = join(root, directory)
+  if (!existsSync(absolute)) return []
+  const files = []
+  for (const entry of readdirSync(absolute, { withFileTypes: true })) {
+    const relativePath = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      if (entry.name === '__tests__') continue
+      files.push(...readTsTree(relativePath))
+    } else if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) {
+      files.push(relativePath)
+    }
+  }
+  return files
+}
+
+/** Retire le module de tests final : `fs::write` n'y sert qu'à fabriquer une
+ *  arborescence temporaire, jamais à modifier les fichiers de l'utilisateur. */
+function stripTestModule(source) {
+  const marker = source.indexOf('\n#[cfg(test)]')
+  return marker === -1 ? source : source.slice(0, marker)
+}
+
+const analysisRust = readTree('src-tauri/src/fs_engine')
+  .filter((file) => file.endsWith('analysis.rs'))
+  .map((file) => stripTestModule(stripComments(read(file))))
+  .join('\n')
+const analysisCommand = stripTestModule(stripComments(read('src-tauri/src/commands/analysis.rs')))
+const screensCode = [
+  'src/features/dashboard/DashboardPage.tsx',
+  'src/features/disk-analysis/DiskAnalysisPage.tsx',
+  'src/features/history/HistoryPage.tsx',
+  'src/features/uninstall/UninstallPage.tsx',
+  'src/features/monitoring/MonitoringPage.tsx',
+]
+  .map((file) => read(file))
+  .join('\n')
+const appTs = readTsTree('src').map((file) => read(file)).join('\n')
+const measurementsStore = read('src/store/measurements.tsx')
+
+check('Mesure', 'Commande `analysis_scan` déclarée, exposée et miroitée',
+  read('src-tauri/src/lib.rs').includes('commands::analysis::analysis_scan') &&
+  contracts.includes("analysisScan: 'analysis_scan'") &&
+  read('src/services/system-service.ts').includes('analyze('))
+check('Mesure', 'Analyse strictement en lecture : aucune écriture, aucun processus',
+  !/fs::write|File::create|remove_file|remove_dir_all|std::process|Command::new|ShellExecute/u.test(analysisRust + analysisCommand))
+check('Mesure', 'Une seule boucle de parcours, partagée entre exploration et mesure',
+  /pub\(crate\) fn traverse/u.test(read('src-tauri/src/fs_engine/walker.rs')) &&
+  !/read_dir/u.test(stripTestModule(analysisRust)))
+check('Mesure', 'Aucune mesure de la maquette ne subsiste dans les écrans',
+  !/124\s?806|2,1 To|2,16 To|684 Go|578 Go|326 Go|248 éléments|1 284 éléments/u.test(screensCode))
+check('Mesure', 'Aucun écran ne consomme plus les fixtures retirées',
+  !/useWorkspace|demoResidues|demoHistory/u.test(appTs) &&
+  !existsSync(join(root, 'src/data/use-workspace.ts')))
+check('Mesure', 'Le moteur de démonstration refuse la mesure au lieu d’inventer un rapport',
+  /async analyze\(/u.test(read('src/services/mock/mock-system-service.ts')) &&
+  /not_available/u.test(read('src/services/mock/mock-system-service.ts')))
+check('Mesure', 'Journal de session uniquement, jamais persisté',
+  measurementsStore.includes('journal') &&
+  !/localStorage|sessionStorage|indexedDB/u.test(measurementsStore))
+check('Mesure', 'Les fonctions absentes sont nommées avec leur lot',
+  read('src/features/uninstall/UninstallPage.tsx').includes('lot C2') &&
+  read('src/features/monitoring/MonitoringPage.tsx').includes('lot C4') &&
+  read('src/features/history/HistoryPage.tsx').includes('lot D'))
+
 /* ------------------------------------------------------------ Installateur */
 
 const ciWorkflow = read('.github/workflows/ci.yml')

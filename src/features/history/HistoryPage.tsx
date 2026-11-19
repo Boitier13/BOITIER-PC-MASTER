@@ -1,26 +1,35 @@
 import { Activity, ArrowDown, ChevronRight, Database, Download, FileText, TrendingUp, Unplug } from 'lucide-react'
 import { PageHeading } from '@/components/PageHeading'
-import { useWorkspace } from '@/data/use-workspace'
-import { HISTORY_KIND_LABEL, HISTORY_TABS, matchesHistoryTab, type HistoryTab } from '@/domain/labels'
-import type { HistoryKind } from '@/domain/types'
+import { HISTORY_KIND_LABEL, HISTORY_TABS, type HistoryTab } from '@/domain/labels'
+import { formatDateTime } from '@/lib/format'
+import { useMeasurements } from '@/store/measurements'
 import { useAppState } from '@/store/app-state'
+
+const TAB_HINTS: Record<Exclude<HistoryTab, 'Tous'>, string> = {
+  Inventaire: 'Les inventaires enregistrés arriveront avec la base locale (lot D). Aucun instantané n’est conservé pour l’instant.',
+  Désinstallation: 'Aucune désinstallation n’est possible : la fonction arrive au lot C2.',
+  Analyse: 'Chaque mesure d’espace réellement exécutée apparaît ici, avec son périmètre et son résultat.',
+  Surveillance: 'La surveillance réelle du système arrive au lot C4.',
+}
 
 /**
  * Historique et rapports.
- * Compteurs et badge « 24 » conservés tels quels (audit B11) : ils ne
- * correspondent pas aux lignes réellement présentes.
+ *
+ * L'écran ne montre que des opérations **réellement exécutées pendant la
+ * session** : aucune ligne d'exemple, aucun compteur figé. Le journal n'est pas
+ * persisté et le dit explicitement.
  */
 export function HistoryPage() {
-  const { history } = useWorkspace()
-  const { historyTab, setHistoryTab, openAction } = useAppState()
+  const { journal } = useMeasurements()
+  const { historyTab, setHistoryTab } = useAppState()
 
-  const items = history.filter((entry) => matchesHistoryTab(historyTab, entry.kind))
+  const items = journal.filter((entry) => historyTab === 'Tous' || HISTORY_KIND_LABEL[entry.kind] === historyTab)
 
   const stats: [string, string, typeof Database][] = [
-    ['Inventaires enregistrés', '12', Database],
-    ['Désinstallations', '8', Unplug],
-    ['Surveillances', '5', Activity],
-    ['Rapports disponibles', '24', FileText],
+    ['Mesures exécutées', String(journal.length), Database],
+    ['Mesures complètes', String(journal.filter((entry) => entry.result === 'Terminé').length), FileText],
+    ['Mesures partielles', String(journal.filter((entry) => entry.result === 'Partiel').length), Activity],
+    ['Mesures annulées ou en échec', String(journal.filter((entry) => entry.result !== 'Terminé' && entry.result !== 'Partiel').length), Unplug],
   ]
 
   return (
@@ -28,13 +37,24 @@ export function HistoryPage() {
       <PageHeading
         eyebrow="SUIVI / ACTIVITÉ"
         title="Historique et rapports"
-        description="Consultez les opérations et rapports de démonstration."
+        description="Opérations réellement exécutées pendant cette session."
         action={
-          <button className="button secondary" onClick={() => openAction('Exporter les rapports')}>
+          <button
+            className="button secondary"
+            disabled
+            title="L’export sera disponible avec la base locale (lot D)"
+          >
             <Download size={15} /> Exporter
           </button>
         }
       />
+
+      <div className="info-banner">
+        <span>
+          Journal de session : il n’est conservé que jusqu’à la fermeture de l’application. Aucune opération
+          n’y est inscrite si elle n’a pas réellement eu lieu.
+        </span>
+      </div>
 
       <div className="history-stats">
         {stats.map(([label, value, Icon]) => (
@@ -57,7 +77,7 @@ export function HistoryPage() {
               className={historyTab === tab ? 'selected' : ''}
             >
               {tab}
-              {tab === 'Tous' && <span>24</span>}
+              {tab === 'Tous' && <span>{journal.length}</span>}
             </button>
           ))}
         </div>
@@ -71,16 +91,16 @@ export function HistoryPage() {
                 <th>Opération</th>
                 <th>Éléments concernés</th>
                 <th>Résultat</th>
-                <th>Rapport</th>
+                <th>Périmètre</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id}>
-                  <td>{item.date}</td>
+                  <td>{formatDateTime(item.atMs)}</td>
                   <td>
                     <strong>{item.name}</strong>
-                    <span className="history-kind">{HISTORY_KIND_LABEL[item.kind as HistoryKind]}</span>
+                    <span className="history-kind">{HISTORY_KIND_LABEL[item.kind]}</span>
                   </td>
                   <td>{item.detail}</td>
                   <td>
@@ -89,19 +109,35 @@ export function HistoryPage() {
                       {item.result}
                     </span>
                   </td>
-                  <td>
-                    <button className="report-link" onClick={() => openAction(`Rapport : ${item.name}`)}>
-                      Détails <ChevronRight size={14} />
-                    </button>
-                  </td>
+                  <td>Cette session</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {!items.length && (
+            <div className="empty-state">
+              <Activity size={22} />
+              <strong>
+                {historyTab === 'Tous' ? 'Aucune opération dans cette session' : 'Aucune opération de ce type'}
+              </strong>
+              <p>
+                {historyTab === 'Tous'
+                  ? 'Lancez une mesure d’espace depuis le tableau de bord ou l’analyse de l’espace : elle apparaîtra ici dès qu’elle sera terminée.'
+                  : TAB_HINTS[historyTab as Exclude<HistoryTab, 'Tous'>]}
+              </p>
+            </div>
+          )}
         </div>
         <div className="table-footer">
-          <span>Affichage {items.length} opérations récentes · Données fictives</span>
-          <button className="text-link" onClick={() => openAction('Comparer deux inventaires')}>
+          <span>
+            Affichage {items.length} opération{items.length > 1 ? 's' : ''} de cette session · non conservée
+            après fermeture
+          </span>
+          <button
+            className="text-link"
+            disabled
+            title="La comparaison arrive avec la base locale (lot D)"
+          >
             Comparer deux inventaires <ChevronRight size={14} />
           </button>
         </div>
@@ -113,9 +149,12 @@ export function HistoryPage() {
         </div>
         <div>
           <strong>Suivez l’évolution de vos disques</strong>
-          <span>Comparez deux inventaires enregistrés pour visualiser les changements.</span>
+          <span>
+            La comparaison de deux inventaires nécessite la base locale : elle est prévue au lot D, aucune
+            donnée n’est conservée pour l’instant.
+          </span>
         </div>
-        <button className="button secondary" onClick={() => openAction('Comparer deux inventaires')}>
+        <button className="button secondary" disabled title="Disponible au lot D">
           Comparer des inventaires <ChevronRight size={14} />
         </button>
       </div>

@@ -1,5 +1,7 @@
 import { withEntryType } from '@/domain/file-entry'
 import type {
+  AnalysisReport,
+  AnalysisRequest,
   AppInfo,
   AppInventory,
   AppListQuery,
@@ -25,6 +27,8 @@ import type {
 import {
   COMMANDS,
   EVENTS,
+  type AnalysisReportPayload,
+  type AnalysisRequestPayload,
   type AppInventoryPayload,
   type AppInfoPayload,
   type DirectoryListingPayload,
@@ -92,6 +96,32 @@ function mapListing(payload: DirectoryListingPayload): DirectoryListing {
     truncated: payload.truncated,
     denied: payload.denied,
     isProtected: payload.isProtected,
+  }
+}
+
+function mapAnalysis(payload: AnalysisReportPayload): AnalysisReport {
+  return {
+    root: payload.root,
+    scannedAtMs: payload.scannedAtMs,
+    elapsedMs: payload.elapsedMs,
+    files: payload.files,
+    folders: payload.folders,
+    totalSizeBytes: payload.totalSizeBytes,
+    visited: payload.visited,
+    denied: payload.denied,
+    skippedProtected: payload.skippedProtected,
+    truncated: payload.truncated,
+    cancelled: payload.cancelled,
+    byCategory: payload.byCategory.map((item) => ({
+      category: mapCategory(item.category),
+      files: item.files,
+      bytes: item.bytes,
+    })),
+    topFolders: payload.topFolders.map((folder) => ({ ...folder })),
+    largestFiles: payload.largestFiles.map((file) => ({
+      ...file,
+      category: mapCategory(file.category),
+    })),
   }
 }
 
@@ -242,6 +272,50 @@ export class TauriSystemService implements SystemService {
     } catch (error) {
       if (signal?.aborted) {
         throw new ServiceError('cancelled', 'Parcours annulé.', undefined, 'cancelled')
+      }
+      throw error
+    } finally {
+      signal?.removeEventListener('abort', abort)
+      unlisten()
+    }
+  }
+
+  /**
+   * Mesure d'espace agrégée (`analysis_scan`).
+   *
+   * Même canal de progression et même jeton d'annulation que l'exploration :
+   * `walk_cancel` arrête indifféremment un parcours ou une mesure.
+   */
+  async analyze(request: AnalysisRequest, handlers: WalkHandlers = {}): Promise<AnalysisReport> {
+    const { onProgress, signal } = handlers
+    const scanId = `analysis-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+    const unlisten = onProgress
+      ? await listenEvent<ScanProgressPayload>(EVENTS.scanProgress, (payload) => {
+          if (payload.scanId === scanId) onProgress(payload)
+        })
+      : () => {}
+
+    const abort = () => {
+      void invokeCommand<boolean>(COMMANDS.walkCancel, { scanId }).catch(() => {
+        /* Meilleur effort : la mesure reste bornée par `maxEntries`. */
+      })
+    }
+
+    signal?.addEventListener('abort', abort)
+
+    try {
+      const payload: AnalysisRequestPayload = { root: request.root }
+      if (request.maxEntries !== undefined) payload.maxEntries = request.maxEntries
+      if (request.maxDepth !== undefined) payload.maxDepth = request.maxDepth
+      const report = await invokeCommand<AnalysisReportPayload>(COMMANDS.analysisScan, {
+        scanId,
+        request: payload,
+      })
+      return mapAnalysis(report)
+    } catch (error) {
+      if (signal?.aborted) {
+        throw new ServiceError('cancelled', 'Mesure annulée.', undefined, 'cancelled')
       }
       throw error
     } finally {

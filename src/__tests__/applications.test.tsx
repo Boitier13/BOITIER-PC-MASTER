@@ -98,6 +98,7 @@ function serviceReturning(payload: AppInventory | Error): SystemService {
     listDirectory: unimplemented,
     getEntryMetadata: unimplemented,
     walk: unimplemented,
+    analyze: unimplemented,
     listInstalledApps: () => (payload instanceof Error ? Promise.reject(payload) : Promise.resolve(payload)),
     listResidues: unimplemented,
     listHistory: unimplemented,

@@ -14,6 +14,7 @@
 //!  4. une erreur d'accès sur une entrée n'interrompt jamais le parcours : elle
 //!     est comptée et exposée.
 
+pub mod analysis;
 pub mod entry;
 pub mod error;
 pub mod folders;
@@ -23,6 +24,7 @@ pub mod paths;
 pub mod protected;
 pub mod walker;
 
+pub use analysis::{analyze, AnalysisReport, AnalysisRequest};
 pub use entry::{entry_for_path, FileEntryDto};
 pub use error::EngineError;
 pub use listing::{list_directory, DirectoryListingDto, ListOptions};

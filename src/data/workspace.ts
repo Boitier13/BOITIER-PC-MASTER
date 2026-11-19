@@ -1,36 +1,15 @@
-import { apps, history, residues } from '@/data/demo'
+import { apps } from '@/data/demo'
 import { DEMO_VOLUMES } from '@/data/demo-tree'
-import type {
-  Confidence,
-  HistoryEntry,
-  HistoryKind,
-  InstalledApp,
-  Residue,
-  Volume,
-} from '@/domain/types'
+import type { InstalledApp, Volume } from '@/domain/types'
 
 /**
- * Projection typée des données de démonstration.
+ * Projection typée des données du **moteur de démonstration**.
  *
- * Unique point de conversion entre les fixtures brutes (`demo.ts`, conservé tel
- * quel) et le modèle de domaine. L'arborescence de fichiers, elle, vit dans
- * `demo-tree.ts` : elle est désormais structurée (chemins, tailles en octets,
- * attributs) et non plus une simple liste plate.
+ * Limite stricte : seuls les volumes et les applications existent ici, parce
+ * que ce sont les deux seules familles que le contrat `SystemService` sait
+ * fournir en mode démo. Les résidus et l'historique n'ont plus de fixtures :
+ * l'interface affiche leur indisponibilité, plutôt qu'un exemple chiffré.
  */
-
-const CONFIDENCE_BY_LABEL: Record<string, Confidence> = {
-  'Élevée': 'high',
-  Probable: 'medium',
-  Incertain: 'low',
-  'Système': 'system',
-}
-
-const HISTORY_KIND_BY_LABEL: Record<string, HistoryKind> = {
-  Inventaire: 'inventory',
-  Désinstallation: 'uninstall',
-  Analyse: 'analysis',
-  Surveillance: 'monitoring',
-}
 
 export const demoVolumes: Volume[] = DEMO_VOLUMES
 
@@ -52,35 +31,12 @@ export const demoApps: InstalledApp[] = apps.map((app, index) => ({
   registryPath: `DEMO\\${app.name}`,
 }))
 
-export const demoResidues: Residue[] = residues.map((residue, index) => ({
-  id: `residue-${index}`,
-  name: residue.name,
-  type: residue.type,
-  path: residue.path,
-  appLabel: residue.app,
-  confidence: CONFIDENCE_BY_LABEL[residue.confidence] ?? 'low',
-  action: residue.action,
-}))
-
-export const demoHistory: HistoryEntry[] = history.map((item, index) => ({
-  id: `history-${index}`,
-  date: item.date,
-  name: item.name,
-  detail: item.detail,
-  result: item.result,
-  kind: HISTORY_KIND_BY_LABEL[item.kind] ?? 'inventory',
-}))
-
 export interface DemoWorkspace {
   volumes: Volume[]
   apps: InstalledApp[]
-  residues: Residue[]
-  history: HistoryEntry[]
 }
 
 export const demoWorkspace: DemoWorkspace = {
   volumes: demoVolumes,
   apps: demoApps,
-  residues: demoResidues,
-  history: demoHistory,
 }

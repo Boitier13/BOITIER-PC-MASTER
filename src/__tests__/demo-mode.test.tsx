@@ -85,17 +85,16 @@ describe('Mode démonstration', () => {
     expect(screen.getByText(/Action de démonstration enregistrée/)).toBeInTheDocument()
   })
 
-  it('sélectionne les résidus sans permettre les éléments système', async () => {
-    const user = userEvent.setup()
+  it('n’affiche aucun résidu fictif sur l’écran de désinstallation', () => {
     renderAt('/uninstall')
 
-    expect(screen.getByText(/2 élément\(s\) sélectionné\(s\)/)).toBeInTheDocument()
+    expect(screen.getByText('Aucun résidu analysé')).toBeInTheDocument()
+    expect(screen.getByText('0 élément sélectionné · Les éléments système ne sont pas sélectionnables')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Nettoyer les éléments sélectionnés/ })).toBeDisabled()
 
-    const systemCheckbox = screen.getByLabelText('Sélectionner Bibliothèque partagée')
-    expect(systemCheckbox).toBeDisabled()
-
-    await user.click(screen.getByLabelText('Sélectionner Clé de configuration'))
-    expect(screen.getByText(/3 élément\(s\) sélectionné\(s\)/)).toBeInTheDocument()
+    // Aucune case à cocher : il n'y a aucun élément à sélectionner.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+    expect(screen.queryByText('Adobe Photoshop 2025')).not.toBeInTheDocument()
   })
 
   it('bascule le thème depuis les paramètres', async () => {
@@ -112,27 +111,29 @@ describe('Mode démonstration', () => {
     expect(shell()).toHaveClass('theme-dark')
   })
 
-  it('simule la surveillance des installations', async () => {
+  it('présente la surveillance comme indisponible, sans résultat simulé', async () => {
     const user = userEvent.setup()
     renderAt('/monitoring')
 
-    expect(screen.getByText('En attente')).toBeInTheDocument()
+    expect(screen.getByText('Non disponible')).toBeInTheDocument()
+    expect(screen.getByText('Aucun rapport disponible')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Démarrer la surveillance' }))
-    expect(screen.getByText('Surveillance simulée')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Arrêter et générer le rapport' }))
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    const start = screen.getByRole('button', { name: /Démarrer la surveillance/ })
+    expect(start).toBeDisabled()
+    await user.click(start)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByText('Surveillance simulée')).not.toBeInTheDocument()
   })
 
-  it('filtre l’historique par onglet', async () => {
+  it('affiche un historique vide puis les onglets réellement alimentés', async () => {
     const user = userEvent.setup()
     renderAt('/history')
 
-    expect(screen.getByText('Affichage 4 opérations récentes · Données fictives')).toBeInTheDocument()
+    expect(screen.getByText('Aucune opération dans cette session')).toBeInTheDocument()
+    expect(screen.getByText(/Affichage 0 opération de cette session/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /Analyse/ }))
-    expect(screen.getByText('Affichage 1 opérations récentes · Données fictives')).toBeInTheDocument()
+    expect(screen.getByText('Aucune opération de ce type')).toBeInTheDocument()
   })
 
   it('ne déclenche aucun appel réseau au chargement des neuf écrans', async () => {

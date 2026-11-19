@@ -1,4 +1,6 @@
 import type {
+  AnalysisReport,
+  AnalysisRequest,
   AppInfo,
   AppInventory,
   AppListQuery,
@@ -124,6 +126,13 @@ export interface SystemService {
    * Ne modifie rien : c'est un inventaire en lecture seule.
    */
   walk(request: WalkRequest, handlers?: WalkHandlers): Promise<WalkResult>
+  /**
+   * Mesure d'espace bornée d'une racine, en lecture seule.
+   *
+   * La racine est toujours désignée par l'appelant : ce contrat n'invente
+   * jamais de périmètre. Le rapport indique ce qui n'a pas pu être mesuré.
+   */
+  analyze(request: AnalysisRequest, handlers?: WalkHandlers): Promise<AnalysisReport>
 
   /* --- Applications et résidus (phases ultérieures) ----------------- */
   listInstalledApps(query?: AppListQuery): Promise<AppInventory>

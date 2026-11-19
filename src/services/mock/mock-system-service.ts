@@ -11,6 +11,8 @@ import {
 import { joinPath, normalizePathKey, parentPathOf } from '@/domain/file-entry'
 import { DEFAULT_SETTINGS } from '@/domain/types'
 import type {
+  AnalysisReport,
+  AnalysisRequest,
   AppInfo,
   AppInventory,
   AppListQuery,
@@ -350,12 +352,32 @@ export class MockSystemService implements SystemService {
     }
   }
 
-  async listResidues(): Promise<Residue[]> {
-    return [...this.workspace.residues]
+  /**
+   * Aucune mesure réelle en démonstration.
+   *
+   * Le moteur de démonstration ne produit volontairement **aucun** rapport :
+   * afficher un exemple chiffré reviendrait à présenter une invention comme une
+   * mesure. L'interface traduit cette erreur en état d'indisponibilité.
+   */
+  async analyze(request: AnalysisRequest): Promise<AnalysisReport> {
+    throw new ServiceError(
+      'not_available',
+      `La mesure réelle de « ${request.root} » n'est pas disponible en mode démonstration.`,
+      'fileInventory',
+    )
   }
 
+  /**
+   * Aucun résidu : l'analyse n'existe pas encore (lot C2). Renvoyer un exemple
+   * reviendrait à présenter une invention comme un résultat d'analyse.
+   */
+  async listResidues(): Promise<Residue[]> {
+    return []
+  }
+
+  /** Aucun historique persistant : le journal de session est tenu par l'interface. */
   async listHistory(): Promise<HistoryEntry[]> {
-    return [...this.workspace.history]
+    return []
   }
 
   async listSnapshots(): Promise<SnapshotSummary[]> {

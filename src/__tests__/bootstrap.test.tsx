@@ -8,14 +8,15 @@ import { App } from '@/app/App'
  * autres tests remplacent par un MemoryRouter.
  */
 describe('Démarrage de l’application', () => {
-  it('monte l’application avec HashRouter et affiche le tableau de bord', () => {
+  it('monte l’application avec HashRouter et affiche le tableau de bord', async () => {
     render(
       <HashRouter>
         <App />
       </HashRouter>,
     )
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Bonjour, Alexandre')
+    // Le prénom vient du profil lu par le moteur : l'affichage est asynchrone.
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(/^Bonjour/)
     expect(document.querySelector('.app-shell')).toBeInTheDocument()
   })
 })

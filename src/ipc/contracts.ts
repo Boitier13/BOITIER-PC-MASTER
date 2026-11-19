@@ -174,6 +174,54 @@ export interface ScanProgressPayload {
   elapsedMs: number
 }
 
+/* ------------------------------------------------------------------ */
+/* Mesure d'espace (src-tauri/src/commands/analysis.rs)                */
+/* ------------------------------------------------------------------ */
+
+export interface AnalysisRequestPayload {
+  root: string
+  /** Omis : le moteur applique ses propres bornes par défaut. */
+  maxEntries?: number
+  maxDepth?: number
+}
+
+export interface AnalysisCategoryPayload {
+  category: string
+  files: number
+  bytes: number
+}
+
+export interface AnalysisFolderPayload {
+  path: string
+  bytes: number
+  files: number
+}
+
+export interface AnalysisFilePayload {
+  name: string
+  path: string
+  bytes: number
+  modifiedAtMs: number | null
+  category: string
+}
+
+export interface AnalysisReportPayload {
+  root: string
+  scannedAtMs: number
+  elapsedMs: number
+  files: number
+  folders: number
+  totalSizeBytes: number
+  visited: number
+  denied: number
+  skippedProtected: number
+  truncated: boolean
+  cancelled: boolean
+  byCategory: AnalysisCategoryPayload[]
+  topFolders: AnalysisFolderPayload[]
+  largestFiles: AnalysisFilePayload[]
+}
+
 /** Noms des commandes exposées — liste blanche unique côté frontend. */
 export const COMMANDS = {
   appInfo: 'app_info',
@@ -186,6 +234,7 @@ export const COMMANDS = {
   pathMetadata: 'path_metadata',
   walkStart: 'walk_start',
   walkCancel: 'walk_cancel',
+  analysisScan: 'analysis_scan',
   appsList: 'apps_list',
   appsSources: 'apps_sources',
 } as const

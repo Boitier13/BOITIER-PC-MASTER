@@ -160,6 +160,76 @@ export interface WalkRequest {
   options?: WalkOptions
 }
 
+/* ------------------------------------------------------------------ */
+/* Mesure d'espace (commande `analysis_scan`)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Rapport de mesure d'une racine.
+ *
+ * Un rapport n'est **jamais** présenté comme complet par défaut : `truncated`,
+ * `cancelled`, `denied` et `skippedProtected` disent ce qui n'a pas été vu.
+ */
+export interface AnalysisReport {
+  root: string
+  scannedAtMs: number
+  elapsedMs: number
+  files: number
+  folders: number
+  totalSizeBytes: number
+  visited: number
+  denied: number
+  skippedProtected: number
+  truncated: boolean
+  cancelled: boolean
+  byCategory: AnalysisCategory[]
+  topFolders: AnalysisFolder[]
+  largestFiles: AnalysisFile[]
+}
+
+export interface AnalysisCategory {
+  category: FileCategory
+  files: number
+  bytes: number
+}
+
+/** Dossier classé par la taille de son contenu **direct** mesuré. */
+export interface AnalysisFolder {
+  path: string
+  bytes: number
+  files: number
+}
+
+export interface AnalysisFile {
+  name: string
+  path: string
+  bytes: number
+  modifiedAtMs: number | null
+  category: FileCategory
+}
+
+export interface AnalysisRequest {
+  /** Racine explicite : aucun parcours n'est lancé sans elle. */
+  root: string
+  maxEntries?: number
+  maxDepth?: number
+}
+
+/**
+ * Opération réellement exécutée pendant la session.
+ *
+ * Alimente l'historique : rien n'y entre qui n'ait été mesuré. L'ensemble n'est
+ * pas persisté et disparaît à la fermeture de l'application.
+ */
+export interface SessionEntry {
+  id: string
+  atMs: number
+  kind: HistoryKind
+  name: string
+  detail: string
+  result: string
+}
+
 /** Ordre d'affichage de l'explorateur. */
 export type FileSortKey = 'name' | 'type' | 'size' | 'modified'
 export type SortDirection = 'asc' | 'desc'

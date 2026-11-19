@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
-import { useWorkspace } from '@/data/use-workspace'
 import type { HistoryTab } from '@/domain/labels'
 
 /** Modes de désinstallation proposés par la maquette. */
@@ -27,9 +26,6 @@ interface AppState {
   uninstallMode: UninstallMode
   setUninstallMode: (value: UninstallMode) => void
 
-  selectedResidues: string[]
-  setSelectedResidues: (value: string[]) => void
-
   /** Titre de la modale d'action courante (chaîne vide = fermée). */
   dialog: string
   openAction: (name: string) => void
@@ -44,29 +40,19 @@ interface AppState {
 
   expanded: boolean
   setExpanded: (value: boolean) => void
-
-  monitoring: boolean
-  setMonitoring: (value: boolean) => void
 }
 
 const AppStateContext = createContext<AppState | null>(null)
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  const workspace = useWorkspace()
-
   const [dark, setDark] = useState(true)
   const [query, setQuery] = useState('')
   const [selectedDisk, setSelectedDisk] = useState('C:')
   const [uninstallMode, setUninstallMode] = useState<UninstallMode>('Avancé')
-  const [selectedResidues, setSelectedResidues] = useState<string[]>([
-    workspace.residues[0].id,
-    workspace.residues[1].id,
-  ])
   const [dialog, setDialog] = useState('')
   const [toast, setToast] = useState('')
   const [historyTab, setHistoryTab] = useState<HistoryTab>('Tous')
   const [expanded, setExpanded] = useState(true)
-  const [monitoring, setMonitoring] = useState(false)
 
   const notify = useCallback((message: string) => {
     setToast(message)
@@ -87,8 +73,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setSelectedDisk,
       uninstallMode,
       setUninstallMode,
-      selectedResidues,
-      setSelectedResidues,
       dialog,
       openAction,
       closeDialog,
@@ -99,15 +83,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setHistoryTab,
       expanded,
       setExpanded,
-      monitoring,
-      setMonitoring,
     }),
     [
       dark,
       query,
       selectedDisk,
       uninstallMode,
-      selectedResidues,
       dialog,
       openAction,
       closeDialog,
@@ -116,7 +97,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       clearToast,
       historyTab,
       expanded,
-      monitoring,
     ],
   )
 

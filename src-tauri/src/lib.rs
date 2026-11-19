@@ -4,7 +4,8 @@
 //!  - informations techniques : `app_info`, `engine_status`, `db_status`, `ping` ;
 //!  - inventaire des applications : `apps_list`, `apps_sources` ;
 //!  - exploration et inventaire : `volumes_list`, `user_folders`,
-//!    `directory_list`, `path_metadata`, `walk_start`, `walk_cancel`.
+//!    `directory_list`, `path_metadata`, `walk_start`, `walk_cancel` ;
+//!  - mesure d'espace agrégée : `analysis_scan` (annulable par `walk_cancel`).
 //!
 //! Aucune commande de suppression, de déplacement, de renommage, d'écriture, de
 //! modification du registre ou de désinstallation n'est exposée. Aucune
@@ -36,6 +37,7 @@ pub fn run() {
             commands::fs::path_metadata,
             commands::fs::walk_start,
             commands::fs::walk_cancel,
+            commands::analysis::analysis_scan,
             commands::apps::apps_list,
             commands::apps::apps_sources,
         ])

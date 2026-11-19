@@ -174,6 +174,7 @@ describe('Client IPC', () => {
   it('ne déclare que des commandes en lecture, sans écriture ni suppression', () => {
     const commands = Object.values(COMMANDS).sort()
     expect(commands).toEqual([
+      'analysis_scan',
       'app_info',
       'apps_list',
       'apps_sources',

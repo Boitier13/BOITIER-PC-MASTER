@@ -1,6 +1,5 @@
 import {
   Activity,
-  ArrowDown,
   Check,
   Database,
   ExternalLink,
@@ -16,24 +15,32 @@ import { PageHeading } from '@/components/PageHeading'
 import { useAppState } from '@/store/app-state'
 
 /**
- * Surveillance des installations — état simulé.
- * Aucun instantané, aucun différentiel : l'observation réelle arrive en phase 8.
+ * Surveillance des installations — **non disponible**.
+ *
+ * L'écran décrit le flux prévu et reste inerte : aucun instantané n'est pris,
+ * aucune observation n'est enregistrée. Les compteurs d'un rapport ne peuvent
+ * donc pas exister et ne sont pas affichés.
  */
 export function MonitoringPage() {
-  const { monitoring, setMonitoring, openAction } = useAppState()
+  const { openAction } = useAppState()
 
   const steps = [
-    'Créer un état de référence',
-    'Démarrer la surveillance',
-    'Observer les changements',
-    'Arrêter et générer un rapport',
-  ]
-
-  const descriptions = [
-    'Capture de référence des éléments présents avant installation.',
-    'Lance une observation visuelle de démonstration.',
-    'Peut se poursuivre pendant la configuration initiale.',
-    'Résumé structuré des changements observés et supposés.',
+    {
+      title: 'Créer un état de référence',
+      description: 'Capture de référence des éléments présents avant l’installation.',
+    },
+    {
+      title: 'Démarrer la surveillance',
+      description: 'Observation des fichiers, dossiers et entrées de registre concernés.',
+    },
+    {
+      title: 'Observer les changements',
+      description: 'L’observation peut se poursuivre pendant la configuration initiale.',
+    },
+    {
+      title: 'Arrêter et générer un rapport',
+      description: 'Résumé structuré des changements observés et des associations supposées.',
+    },
   ]
 
   return (
@@ -41,15 +48,15 @@ export function MonitoringPage() {
       <PageHeading
         eyebrow="OUTILS / OBSERVATION"
         title="Surveillance des installations"
-        description="Visualisez les étapes de création d’un rapport de changements."
+        description="Voici comment fonctionnera la surveillance, une fois disponible."
         action={<DemoLabel />}
       />
 
       <div className="info-banner">
         <Info size={17} />
         <span>
-          La surveillance réelle du système n’est pas implémentée. Les étapes et résultats ci-dessous sont
-          illustratifs.
+          La surveillance réelle n’est pas implémentée (lot C4). Aucun instantané n’est pris et aucun rapport
+          n’est produit : cet écran décrit le futur flux, sans résultat simulé.
         </span>
       </div>
 
@@ -58,62 +65,46 @@ export function MonitoringPage() {
           <div className="panel-heading">
             <div>
               <h2>Nouvelle surveillance</h2>
-              <p>Un instantané avant/après permet de repérer les changements.</p>
+              <p>Un instantané avant/après permettra de repérer les changements.</p>
             </div>
-            <span className={`monitor-state ${monitoring ? 'running' : 'idle'}`}>
+            <span className="monitor-state idle">
               <i />
-              {monitoring ? 'Surveillance simulée' : 'En attente'}
+              Non disponible
             </span>
           </div>
 
           <div className="step-list">
-            {steps.map((step, index) => {
-              const done = index === 0 || (monitoring && index < 3)
-              const current = index === 3 && monitoring
-              return (
-                <div className={`monitor-step ${done ? 'done' : current ? 'current' : ''}`} key={step}>
-                  <div className="step-marker">{done ? <Check size={14} /> : index + 1}</div>
-                  <div>
-                    <strong>{step}</strong>
-                    <p>{descriptions[index]}</p>
-                  </div>
-                  <span>{index === 0 ? 'Prêt' : monitoring && index === 1 ? 'En cours' : 'À venir'}</span>
+            {steps.map((step, index) => (
+              <div className="monitor-step" key={step.title}>
+                <div className="step-marker">{index + 1}</div>
+                <div>
+                  <strong>{step.title}</strong>
+                  <p>{step.description}</p>
                 </div>
-              )
-            })}
+                <span>À venir</span>
+              </div>
+            ))}
           </div>
 
           <div className="monitor-controls">
-            <button className="button secondary" onClick={() => openAction('Créer l’état de référence')}>
+            <button
+              className="button secondary"
+              disabled
+              title="Disponible au lot C4"
+              onClick={() => openAction('Créer l’état de référence')}
+            >
               <Database size={15} /> Créer l’état de référence
             </button>
-            {!monitoring ? (
-              <button className="button primary" onClick={() => setMonitoring(true)}>
-                <Play size={15} /> Démarrer la surveillance
-              </button>
-            ) : (
-              <>
-                <button
-                  className="button secondary"
-                  onClick={() => openAction('Poursuivre pendant la configuration')}
-                >
-                  <ArrowDown size={15} /> Poursuivre pendant la configuration
-                </button>
-                <button
-                  className="button danger"
-                  onClick={() => {
-                    setMonitoring(false)
-                    openAction('Arrêter et générer le rapport')
-                  }}
-                >
-                  <Pause size={15} /> Arrêter et générer le rapport
-                </button>
-              </>
-            )}
+            <button className="button primary" disabled title="Disponible au lot C4">
+              <Play size={15} /> Démarrer la surveillance
+            </button>
+            <button className="button danger" disabled title="Disponible au lot C4">
+              <Pause size={15} /> Arrêter et générer le rapport
+            </button>
           </div>
 
           <div className="monitor-note">
-            <Info size={15} /> État simulé uniquement. Aucune modification système n’est suivie.
+            <Info size={15} /> Aucune observation n’est enregistrée. Rien n’est modifié sur le système.
           </div>
         </section>
 
@@ -121,7 +112,7 @@ export function MonitoringPage() {
           <div className="panel-heading">
             <div>
               <h2>Types de changements</h2>
-              <p>Éléments inclus dans un rapport</p>
+              <p>Éléments prévus dans un futur rapport</p>
             </div>
           </div>
           {[
@@ -152,29 +143,20 @@ export function MonitoringPage() {
       <section className="panel sample-report">
         <div className="panel-heading">
           <div>
-            <h2>Exemple de rapport</h2>
-            <p>Visualisation d’un rapport fictif d’installation · 18 novembre 2026</p>
+            <h2>Rapport de surveillance</h2>
+            <p>Aucun rapport n’a été produit</p>
           </div>
-          <button className="button secondary" onClick={() => openAction('Ouvrir le rapport de démonstration')}>
+          <button className="button secondary" disabled title="Disponible au lot C4">
             Ouvrir le rapport <ExternalLink size={14} />
           </button>
         </div>
-        <div className="report-stats">
-          {[
-            ['Fichiers créés', '24', 'observé'],
-            ['Dossiers ajoutés', '6', 'observé'],
-            ['Entrées registre', '12', 'supposé'],
-            ['Services / tâches', '2', 'supposé'],
-          ].map(([label, value, kind]) => (
-            <div key={label}>
-              <span>{label}</span>
-              <strong>{value}</strong>
-              <small className={kind}>
-                <i />
-                {kind === 'observé' ? 'Changement observé' : 'Association supposée'}
-              </small>
-            </div>
-          ))}
+        <div className="empty-state">
+          <File size={22} />
+          <strong>Aucun rapport disponible</strong>
+          <p>
+            Les rapports de surveillance seront produits au lot C4. D’ici là, aucun compteur de changements
+            n’est affiché : il n’en existe aucun.
+          </p>
         </div>
       </section>
     </>

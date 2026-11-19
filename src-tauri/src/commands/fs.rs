@@ -33,7 +33,7 @@ pub struct ScanProgressEvent {
     pub elapsed_ms: u64,
 }
 
-const EVENT_SCAN_PROGRESS: &str = "scan://progress";
+pub(crate) const EVENT_SCAN_PROGRESS: &str = "scan://progress";
 
 fn to_command_error(error: EngineError) -> CommandError {
     CommandError::new(error.code(), error.message())

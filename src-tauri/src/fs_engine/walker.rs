@@ -126,6 +126,37 @@ pub fn walk(
     options: &WalkOptions,
     policy: &ProtectionPolicy,
     cancel: &AtomicBool,
+    on_progress: impl FnMut(WalkProgress),
+) -> EngineResult<WalkResult> {
+    traverse(
+        root,
+        options,
+        policy,
+        cancel,
+        true,
+        &mut |_: &FileEntryDto| {},
+        on_progress,
+    )
+}
+
+/// Boucle de parcours commune, partagée avec l'analyse d'espace.
+///
+/// `on_entry` reçoit **chaque entrée visitée**, avant tout filtre : c'est ce qui
+/// permet à `analysis` d'agréger des totaux sans dépendre du plafond de
+/// résultats. Quand `collect` vaut `false`, aucune entrée n'est conservée en
+/// mémoire et les compteurs de résultats (`matched`, `folders`, `files`,
+/// `total_size_bytes`) restent à zéro : ils ne concernent que la liste.
+///
+/// `walk` est l'unique appelant public : son comportement est identique à
+/// celui d'avant l'extraction (rappel vide, collecte active).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn traverse(
+    root: &Path,
+    options: &WalkOptions,
+    policy: &ProtectionPolicy,
+    cancel: &AtomicBool,
+    collect: bool,
+    on_entry: &mut dyn FnMut(&FileEntryDto),
     mut on_progress: impl FnMut(WalkProgress),
 ) -> EngineResult<WalkResult> {
     let started = Instant::now();
@@ -212,7 +243,9 @@ pub fn walk(
                 stats.skipped_protected += 1;
             }
 
-            if matches_filters(&entry, options, &search) {
+            on_entry(&entry);
+
+            if collect && matches_filters(&entry, options, &search) {
                 if entries.len() >= options.max_results {
                     stats.truncated = true;
                 } else {
